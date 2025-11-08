@@ -1281,13 +1281,28 @@
     if (!value) {
       return NaN;
     }
-    const match = String(value)
-      .replace(/[,\s]/g, '')
-      .match(/(-?\d+(?:\.\d+)?)/);
-    if (!match) {
+    const normalised = String(value)
+      .replace(/[\u2012-\u2015]/g, '-')
+      .replace(/,/g, '');
+    const matches = normalised.match(/-?\d+(?:\.\d+)?/g);
+    if (!matches) {
       return NaN;
     }
-    return Number(match[1]);
+    if (matches.length === 1) {
+      return Number(matches[0]);
+    }
+    const numbers = matches.map(Number).filter(Number.isFinite);
+    if (!numbers.length) {
+      return NaN;
+    }
+    const last = numbers[numbers.length - 1];
+    if (numbers.length >= 2) {
+      const first = numbers[0];
+      if (Number.isFinite(first) && Number.isFinite(last) && first > last) {
+        return first;
+      }
+    }
+    return last;
   }
 
   function parseChargeType(value, fallback) {
