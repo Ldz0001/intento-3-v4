@@ -649,6 +649,7 @@ Perf notes:
 <symbol id="ic-check" viewbox="0 0 24 24"><path d="M9 16.2l-3.5-3.5L4 14.2 9 19l12-12-1.5-1.5z"></path></symbol>
 <symbol id="ic-download" viewbox="0 0 24 24"><path d="M5 20h14v-2H5v2zm7-18l-5 5h3v6h4V7h3l-5-5z"></path></symbol>
 <symbol id="ic-upload" viewbox="0 0 24 24"><path d="M5 20h14v-2H5v2zM7 10h3v6h4v-6h3l-5-5-5 5z"></path></symbol>
+<symbol id="ic-calculator" viewbox="0 0 24 24"><path d="M7 3a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2H7zm10 16H7V5h10v14zM9 7h6v2H9V7zm0 4h2v2H9v-2zm0 4h2v2H9v-2zm4-4h2v2h-2v-2zm0 4h2v2h-2v-2z"></path></symbol>
 <symbol id="ic-refresh" viewbox="0 0 24 24"><path d="M17.65 6.35A7.95 7.95 0 0012 4V1L7 6l5 5V7a5 5 0 11-4.9 6H5a7 7 0 107.65-6.65z"></path></symbol>
 <symbol id="ic-menu" viewbox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></symbol>
 <symbol id="ic-dashboard" viewbox="0 0 24 24"><path d="M3 3h9v7H3V3zm11 0h7v5h-7V3zm0 7h7v11h-7V10zm-11 3h9v8H3v-8z"></path></symbol>
@@ -773,6 +774,10 @@ Perf notes:
 <button class="tab-btn" data-route="#/budget" data-testid="nav-budget">
 <span aria-hidden="true" class="tab-icon"><svg class="icon"><use href="#ic-budget"></use></svg></span>
 <span class="tab-label">Budget</span>
+</button>
+<button class="tab-btn" data-route="#/quote-builder" data-testid="nav-quote">
+<span aria-hidden="true" class="tab-icon"><svg class="icon"><use href="#ic-calculator"></use></svg></span>
+<span class="tab-label">Quote Builder</span>
 </button>
 <button class="tab-btn" data-route="#/tasks" data-testid="nav-tasks">
 <span aria-hidden="true" class="tab-icon"><svg class="icon"><use href="#ic-check"></use></svg></span>
@@ -1035,6 +1040,96 @@ Perf notes:
 <div class="row" style="margin-top:10px;">
 <button class="success" data-testid="save-line" id="btnSaveLine"><svg class="icon"><use href="#ic-save"></use></svg> Save</button>
 <button class="ghost" data-testid="reset-line" id="btnResetLine"><svg class="icon"><use href="#ic-refresh"></use></svg> Reset</button>
+</div>
+</section>
+<!-- QUOTE BUILDER -->
+<section aria-labelledby="h-quote-builder" class="tab card quote-builder-tab" hidden="" id="quote-builder" role="region">
+<div class="quote-shell">
+  <header class="quote-header">
+    <div class="quote-header-text">
+      <p class="eyebrow">Financial tools</p>
+      <h3 id="h-quote-builder">Quote builder</h3>
+      <p class="muted">Build a shareable proposal in minutes. Upload your pricing workbook or start with the sample data and tailor the line items.</p>
+    </div>
+    <div class="quote-header-actions">
+      <label class="primary file-trigger" id="excelTrigger">
+        <svg aria-hidden="true" class="icon"><use href="#ic-upload"></use></svg>
+        <span>Upload Excel</span>
+        <input accept=".xlsx" class="sr-only" id="excelInput" type="file"/>
+      </label>
+      <button class="ghost" id="loadDefault" type="button"><svg aria-hidden="true" class="icon"><use href="#ic-refresh"></use></svg> Use sample data</button>
+    </div>
+  </header>
+  <p aria-live="polite" class="quote-status" id="quoteStatus" role="status"></p>
+  <div class="quote-panels">
+    <form class="quote-form" id="quotation-form" onsubmit="return false;">
+      <div class="field">
+        <label for="venueSelect">Venue</label>
+        <select id="venueSelect"></select>
+        <p class="field-hint">Packages are filtered by the venue you pick.</p>
+      </div>
+      <div class="field">
+        <label for="guestCount">Guest count</label>
+        <input id="guestCount" min="0" type="number" value="0"/>
+        <p class="field-hint">Use the guest count that you want reflected on the quote.</p>
+      </div>
+      <div class="field">
+        <label for="packageSelect">Package</label>
+        <select id="packageSelect"></select>
+        <p class="field-hint">Select the base package to anchor pricing.</p>
+      </div>
+      <div class="field">
+        <label for="addonSelect">Add-ons</label>
+        <select id="addonSelect" multiple=""></select>
+        <p class="field-hint">Hold ⌘/Ctrl to pick more than one add-on.</p>
+      </div>
+    </form>
+    <aside aria-label="Quote summary" class="quote-summary">
+      <div class="summary-card">
+        <span class="summary-label">Total</span>
+        <span class="summary-value" id="quoteTotalValue">$0.00</span>
+        <p class="summary-sub">Includes selected packages and add-ons.</p>
+      </div>
+      <dl class="summary-meta">
+        <div>
+          <dt>Guests</dt>
+          <dd id="quoteGuestValue">0</dd>
+        </div>
+        <div>
+          <dt>Package</dt>
+          <dd id="quotePackageValue">—</dd>
+        </div>
+      </dl>
+    </aside>
+  </div>
+  <div aria-label="Quote line items" class="quote-table-wrap" role="region">
+    <table id="quoteTable">
+      <caption class="sr-only">Line items included in the generated quote.</caption>
+      <thead>
+        <tr>
+          <th scope="col">Item</th>
+          <th scope="col">Details</th>
+          <th scope="col">Qty</th>
+          <th scope="col">Unit price</th>
+          <th scope="col">Line total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="empty-row"><td colspan="5">Select a venue and package to start building your quote.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="quote-export">
+    <div class="quote-export-text">
+      <h4>Export</h4>
+      <p class="muted">Download the quote in your preferred format.</p>
+    </div>
+    <div class="quote-export-actions">
+      <button class="primary" id="exportPdf" type="button"><svg aria-hidden="true" class="icon"><use href="#ic-download"></use></svg> PDF</button>
+      <button class="ghost" id="exportDocx" type="button"><svg aria-hidden="true" class="icon"><use href="#ic-edit"></use></svg> DOCX</button>
+      <button class="ghost" id="exportXlsx" type="button"><svg aria-hidden="true" class="icon"><use href="#ic-upload"></use></svg> Excel</button>
+    </div>
+  </div>
 </div>
 </section>
 <!-- TASKS -->
@@ -1680,7 +1775,7 @@ const ZOOM_MIN=0.6;
 const ZOOM_MAX=1.4;
 const SUPPORTS_CSS_ZOOM='zoom' in document.body.style;
 /* ---------- Router (hash) ---------- */
-const ROUTES=["#/dashboard","#/analysis","#/events","#/timeline","#/vendors","#/budget","#/tasks","#/map","#/settings","#/post"];
+const ROUTES=["#/dashboard","#/analysis","#/events","#/timeline","#/vendors","#/budget","#/quote-builder","#/tasks","#/map","#/settings","#/post"];
 function navigate(hash){
   const h=ROUTES.includes(hash)?hash:"#/dashboard";
   if(location.hash!==h) location.hash=h;
@@ -4666,56 +4761,5 @@ async function ensureLeaflet(){
   window.navigate = function(hash){ orig(hash); requestAnimationFrame(()=> document.getElementById('main')?.focus()); };
 })();
 </script>
-<div class="view" id="quote-builder" style="display:none">
-<section id="data-upload">
-<label for="excelInput">Upload Excel:</label>
-<input accept=".xlsx" id="excelInput" type="file"/>
-<button id="loadDefault">Use Default Data</button>
-</section>
-<section id="quotation-form">
-<div>
-<label for="venueSelect">Venue:</label>
-<select id="venueSelect"></select>
-</div>
-<div>
-<label for="guestCount">Number of Guests:</label>
-<input id="guestCount" min="0" type="number" value="0"/>
-</div>
-<div>
-<label for="packageSelect">Package:</label>
-<select id="packageSelect"></select>
-</div>
-<div>
-<label for="addonSelect">Add-Ons:</label>
-<select id="addonSelect" multiple=""></select>
-</div>
-</section>
-<table id="quoteTable">
-<thead>
-<tr>
-<th>Item</th>
-<th>Details</th>
-<th>Qty</th>
-<th>Unit Price</th>
-<th>Total</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-<section id="export-buttons">
-<button id="exportPdf">Export as PDF</button>
-<button id="exportDocx">Export as DOCX</button>
-<button id="exportXlsx">Export as Excel</button>
-</section>
-</div><script>
-function showViewByHash() {
-  const hash = window.location.hash;
-  document.querySelectorAll('.view').forEach(v => v.style.display = 'none');
-  if (hash === '#/quote-builder') {
-    document.getElementById('quote-builder').style.display = 'block';
-  }
-}
-window.addEventListener('hashchange', showViewByHash);
-window.addEventListener('DOMContentLoaded', showViewByHash);
-</script></body>
+</body>
 </html>
