@@ -1,146 +1,474 @@
+(() => {
+  const currencyFormatter = new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+  });
 
-let venueData = [], packageData = [], addonData = [];
-
-document.getElementById('excelInput').addEventListener('change', handleFile, false);
-document.getElementById('loadDefault').addEventListener('click', () => loadExcel('./data/database.xlsx'));
-
-function handleFile(e) {
-  const file = e.target.files[0];
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    const data = new Uint8Array(event.target.result);
-    const workbook = XLSX.read(data, {type: 'array'});
-    processWorkbook(workbook);
+  const DEFAULT_DATA = {
+    venues: [
+      { VENUE: 'Aurora Ballroom', LOCATION: 'Downtown Arts District', CAPACITY: 250 },
+      { VENUE: 'Harborview Terrace', LOCATION: 'Seaside Promenade', CAPACITY: 180 },
+      { VENUE: 'Garden Pavilion', LOCATION: 'Botanical Park', CAPACITY: 120 },
+      { VENUE: 'Skyline Loft', LOCATION: 'Financial Quarter', CAPACITY: 140 },
+    ],
+    packages: [
+      {
+        VENUE: 'Aurora Ballroom',
+        PACKAGE: 'Signature Evening',
+        GUESTS: 150,
+        PRICE: 18500,
+        DESCRIPTION: 'Five-course dinner, premium open bar, custom lighting design.',
+      },
+      {
+        VENUE: 'Aurora Ballroom',
+        PACKAGE: 'Cocktail Soirée',
+        GUESTS: 120,
+        PRICE: 14500,
+        DESCRIPTION: 'Two-hour cocktail reception with twelve chef stations.',
+      },
+      {
+        VENUE: 'Harborview Terrace',
+        PACKAGE: 'Sunset Celebration',
+        GUESTS: 100,
+        PRICE: 16800,
+        DESCRIPTION: 'Seasonal buffet, patio lounge furniture, and fire pit service.',
+      },
+      {
+        VENUE: 'Garden Pavilion',
+        PACKAGE: 'Garden Gala',
+        GUESTS: 90,
+        PRICE: 15200,
+        DESCRIPTION: 'Farm-to-table tasting menu, floral décor, and string quartet.',
+      },
+      {
+        VENUE: 'Skyline Loft',
+        PACKAGE: 'City Lights Experience',
+        GUESTS: 110,
+        PRICE: 17450,
+        DESCRIPTION: 'Rooftop ceremony, urban tapas stations, and skyline photo lounge.',
+      },
+    ],
+    addons: [
+      {
+        ADDON: 'Live Jazz Trio',
+        PRICE: 1200,
+        DETAILS: 'Three-hour performance with curated set breaks.',
+      },
+      {
+        ADDON: 'Custom Lighting Design',
+        PRICE: 950,
+        DETAILS: 'Uplighting, gobo projection, and dance floor wash.',
+      },
+      {
+        ADDON: 'Photo Booth Experience',
+        PRICE: 750,
+        DETAILS: 'Unlimited prints, on-site attendant, digital gallery delivery.',
+      },
+      {
+        ADDON: 'Late-Night Snack Bar',
+        PRICE: 9,
+        QTY: 120,
+        DETAILS: 'Per-guest pricing with gourmet sliders and fries (120 servings).',
+      },
+      {
+        ADDON: 'Luxury Transportation',
+        PRICE: 550,
+        DETAILS: 'Executive sedan transfers for VIP guests (up to 3 hours).',
+      },
+    ],
   };
-  reader.readAsArrayBuffer(file);
-}
 
-function loadExcel(url) {
-  fetch(url).then(res => res.arrayBuffer()).then(data => {
-    const workbook = XLSX.read(data, {type: 'array'});
-    processWorkbook(workbook);
-  }).catch(() => alert('Failed to load default Excel file.'));
-}
+  const state = {
+    refs: null,
+  };
 
-function processWorkbook(workbook) {
-  venueData = XLSX.utils.sheet_to_json(workbook.Sheets['VENUES']);
-  packageData = XLSX.utils.sheet_to_json(workbook.Sheets['PACKAGES']);
-  addonData = XLSX.utils.sheet_to_json(workbook.Sheets['ADDONS']);
-  populateVenues();
-  populateAddons();
-  document.getElementById('venueSelect').addEventListener('change', populatePackages);
-  document.getElementById('guestCount').addEventListener('input', updateQuote);
-  document.getElementById('packageSelect').addEventListener('change', updateQuote);
-  document.getElementById('addonSelect').addEventListener('change', updateQuote);
-}
+  let venueData = [];
+  let packageData = [];
+  let addonData = [];
 
-function populateVenues() {
-  const select = document.getElementById('venueSelect');
-  select.innerHTML = '<option value="">-- Select Venue --</option>';
-  venueData.forEach(v => {
-    const opt = document.createElement('option');
-    opt.value = v.VENUE;
-    opt.textContent = v.VENUE;
-    select.appendChild(opt);
+  document.addEventListener('DOMContentLoaded', () => {
+    const refs = {
+      excelInput: document.getElementById('excelInput'),
+      loadDefault: document.getElementById('loadDefault'),
+      venueSelect: document.getElementById('venueSelect'),
+      guestInput: document.getElementById('guestCount'),
+      packageSelect: document.getElementById('packageSelect'),
+      addonSelect: document.getElementById('addonSelect'),
+      tableBody: document.querySelector('#quoteTable tbody'),
+      status: document.getElementById('quoteStatus'),
+      totalValue: document.getElementById('quoteTotalValue'),
+      guestValue: document.getElementById('quoteGuestValue'),
+      packageValue: document.getElementById('quotePackageValue'),
+      exportPdf: document.getElementById('exportPdf'),
+      exportDocx: document.getElementById('exportDocx'),
+      exportXlsx: document.getElementById('exportXlsx'),
+    };
+
+    if (!refs.venueSelect || !refs.tableBody) {
+      return;
+    }
+
+    state.refs = refs;
+
+    refs.excelInput?.addEventListener('change', handleFile);
+    refs.loadDefault?.addEventListener('click', () => {
+      loadDefaultData();
+      announceStatus('Sample data loaded. You can continue customising the quote.', 'success');
+    });
+
+    refs.venueSelect.addEventListener('change', () => {
+      populatePackages();
+      updateQuote();
+    });
+    refs.packageSelect.addEventListener('change', updateQuote);
+    refs.addonSelect.addEventListener('change', updateQuote);
+    refs.guestInput.addEventListener('input', updateQuote);
+
+    refs.exportPdf?.addEventListener('click', exportPdf);
+    refs.exportDocx?.addEventListener('click', exportDocx);
+    refs.exportXlsx?.addEventListener('click', exportXlsx);
+
+    loadDefaultData();
+    announceStatus('Sample data loaded. Choose a venue to get started.', 'success');
   });
-}
 
-function populatePackages() {
-  const venue = document.getElementById('venueSelect').value;
-  const select = document.getElementById('packageSelect');
-  select.innerHTML = '<option value="">-- Select Package --</option>';
-  const filtered = packageData.filter(p => p.VENUE === venue);
-  filtered.forEach(pkg => {
-    const opt = document.createElement('option');
-    opt.value = pkg.PACKAGE;
-    opt.textContent = `${pkg.PACKAGE} (${pkg.GUESTS} guests - $${pkg.PRICE})`;
-    select.appendChild(opt);
-  });
-  updateQuote();
-}
-
-function populateAddons() {
-  const select = document.getElementById('addonSelect');
-  select.innerHTML = '';
-  addonData.forEach(add => {
-    const opt = document.createElement('option');
-    opt.value = add.ADDON;
-    opt.textContent = `${add.ADDON} ($${add.PRICE})`;
-    select.appendChild(opt);
-  });
-}
-
-function updateQuote() {
-  const guests = parseInt(document.getElementById('guestCount').value) || 0;
-  const packageName = document.getElementById('packageSelect').value;
-  const packageObj = packageData.find(p => p.PACKAGE === packageName);
-  const addonSelect = document.getElementById('addonSelect');
-  const selectedAddons = Array.from(addonSelect.selectedOptions).map(opt => opt.value);
-
-  const tbody = document.querySelector('#quoteTable tbody');
-  tbody.innerHTML = '';
-
-  let subtotal = 0;
-
-  if (packageObj) {
-    const pkgPrice = parseFloat(packageObj.PRICE) || 0;
-    const row = buildRow(packageObj.PACKAGE, `${packageObj.GUESTS} guests`, 1, pkgPrice);
-    subtotal += pkgPrice;
-    tbody.appendChild(row);
+  function loadDefaultData() {
+    venueData = DEFAULT_DATA.venues.map(clone);
+    packageData = DEFAULT_DATA.packages.map(clone);
+    addonData = DEFAULT_DATA.addons.map(clone);
+    refreshSelectors();
+    updateQuote();
   }
 
-  selectedAddons.forEach(addonName => {
-    const add = addonData.find(a => a.ADDON === addonName);
-    if (add) {
-      const unit = parseFloat(add.PRICE) || 0;
-      const qty = 1;
-      const row = buildRow(add.ADDON, add.DETAILS || '', qty, unit);
-      subtotal += qty * unit;
-      tbody.appendChild(row);
+  function handleFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
     }
-  });
+    announceStatus(`Loading ${file.name}…`);
 
-  const totalRow = document.createElement('tr');
-  totalRow.innerHTML = `<td colspan="4"><strong>Total</strong></td><td><strong>$${subtotal.toFixed(2)}</strong></td>`;
-  tbody.appendChild(totalRow);
-}
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const buffer = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        loadFromWorkbook(workbook);
+        announceStatus(`Imported ${file.name}. Select a venue to review the pricing.`, 'success');
+      } catch (error) {
+        console.error(error);
+        announceStatus('We could not read that workbook. Ensure it includes VENUES, PACKAGES, and ADDONS sheets.', 'error');
+      } finally {
+        event.target.value = '';
+      }
+    };
+    reader.onerror = () => {
+      announceStatus('We could not read the selected file. Please try a different .xlsx file.', 'error');
+      event.target.value = '';
+    };
+    reader.readAsArrayBuffer(file);
+  }
 
-function buildRow(name, details, qty, price) {
-  const tr = document.createElement('tr');
-  const total = qty * price;
-  tr.innerHTML = `
-    <td>${name}</td>
-    <td>${details}</td>
-    <td>${qty}</td>
-    <td>$${price.toFixed(2)}</td>
-    <td>$${total.toFixed(2)}</td>
-  `;
-  return tr;
-}
+  function loadFromWorkbook(workbook) {
+    const venuesSheet = workbook.Sheets['VENUES'];
+    const packagesSheet = workbook.Sheets['PACKAGES'];
+    if (!venuesSheet || !packagesSheet) {
+      throw new Error('Missing VENUES or PACKAGES sheet');
+    }
+    const addonsSheet = workbook.Sheets['ADDONS'];
 
-// Export functions
-document.getElementById('exportPdf').addEventListener('click', () => {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  doc.autoTable({ html: '#quoteTable' });
-  doc.save('quotation.pdf');
-});
+    venueData = XLSX.utils.sheet_to_json(venuesSheet);
+    packageData = XLSX.utils.sheet_to_json(packagesSheet);
+    addonData = addonsSheet ? XLSX.utils.sheet_to_json(addonsSheet) : [];
 
-document.getElementById('exportDocx').addEventListener('click', () => {
-  const table = document.querySelector('#quoteTable');
-  const doc = new window.docx.Document();
-  const rows = Array.from(table.rows).map(tr => new docx.TableRow({
-    children: Array.from(tr.cells).map(cell => new docx.TableCell({
-      children: [new docx.Paragraph(cell.textContent)],
-    }))
-  }));
-  doc.addSection({ children: [new docx.Table({ rows })] });
-  docx.Packer.toBlob(doc).then(blob => saveAs(blob, 'quotation.docx'));
-});
+    refreshSelectors();
+    updateQuote();
+  }
 
-document.getElementById('exportXlsx').addEventListener('click', () => {
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.table_to_sheet(document.getElementById('quoteTable'));
-  XLSX.utils.book_append_sheet(wb, ws, 'Quotation');
-  XLSX.writeFile(wb, 'quotation.xlsx');
-});
+  function refreshSelectors() {
+    if (!state.refs) return;
+    const { venueSelect, packageSelect, addonSelect } = state.refs;
+    const previousVenue = venueSelect.value;
+    const previousPackage = packageSelect.value;
+    const previousAddons = new Set(Array.from(addonSelect?.selectedOptions || []).map((opt) => opt.value));
+
+    populateVenues(previousVenue);
+    populatePackages(previousPackage);
+    populateAddons(previousAddons);
+  }
+
+  function populateVenues(previousValue = '') {
+    const { venueSelect } = state.refs;
+    venueSelect.innerHTML = '';
+
+    if (!venueData.length) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = 'No venues available';
+      option.disabled = true;
+      option.selected = true;
+      venueSelect.appendChild(option);
+      return;
+    }
+
+    venueData
+      .filter((venue) => venue && venue.VENUE)
+      .forEach((venue, index) => {
+        const option = document.createElement('option');
+        option.value = String(venue.VENUE);
+        const parts = [venue.VENUE];
+        if (venue.LOCATION) parts.push(`• ${venue.LOCATION}`);
+        if (venue.CAPACITY) parts.push(`— up to ${Number(venue.CAPACITY).toLocaleString()} guests`);
+        option.textContent = parts.join(' ');
+        if (index === 0 && !previousValue) {
+          option.selected = true;
+        }
+        venueSelect.appendChild(option);
+      });
+
+    if (previousValue && venueData.some((venue) => String(venue.VENUE) === previousValue)) {
+      venueSelect.value = previousValue;
+    }
+  }
+
+  function populatePackages(previousValue = '') {
+    const { venueSelect, packageSelect } = state.refs;
+    const selectedVenue = venueSelect.value;
+    packageSelect.innerHTML = '';
+
+    const matching = packageData.filter((pkg) => !selectedVenue || String(pkg.VENUE) === selectedVenue);
+
+    if (!matching.length) {
+      const option = document.createElement('option');
+      option.value = '';
+      option.textContent = selectedVenue ? 'No packages available for this venue' : 'No packages available';
+      option.disabled = true;
+      packageSelect.appendChild(option);
+      return;
+    }
+
+    matching.forEach((pkg) => {
+      if (!pkg?.PACKAGE) return;
+      const option = document.createElement('option');
+      option.value = String(pkg.PACKAGE);
+      const guestCount = parseInt(pkg.GUESTS, 10);
+      const guestLabel = Number.isFinite(guestCount) && guestCount > 0 ? `${guestCount.toLocaleString()} guests` : 'Flexible';
+      option.textContent = `${pkg.PACKAGE} — ${guestLabel} — ${formatCurrency(asNumber(pkg.PRICE))}`;
+      packageSelect.appendChild(option);
+    });
+
+    if (previousValue && matching.some((pkg) => String(pkg.PACKAGE) === previousValue)) {
+      packageSelect.value = previousValue;
+    } else if (matching.length) {
+      const [first] = matching;
+      packageSelect.value = String(first.PACKAGE);
+      const guestCount = parseInt(first.GUESTS, 10);
+      if (
+        Number.isFinite(guestCount) &&
+        guestCount > 0 &&
+        state.refs?.guestInput &&
+        (!state.refs.guestInput.value || state.refs.guestInput.value === '0')
+      ) {
+        state.refs.guestInput.value = guestCount;
+      }
+    }
+  }
+
+  function populateAddons(previousValues = new Set()) {
+    const { addonSelect } = state.refs;
+    addonSelect.innerHTML = '';
+
+    if (!addonData.length) {
+      const option = document.createElement('option');
+      option.textContent = 'No add-ons available in this dataset';
+      option.disabled = true;
+      addonSelect.appendChild(option);
+      return;
+    }
+
+    addonData
+      .filter((addon) => addon && addon.ADDON)
+      .forEach((addon) => {
+        const option = document.createElement('option');
+        option.value = String(addon.ADDON);
+        option.textContent = `${addon.ADDON} — ${formatCurrency(asNumber(addon.PRICE))}`;
+        option.selected = previousValues.has(option.value);
+        addonSelect.appendChild(option);
+      });
+  }
+
+  function updateQuote() {
+    if (!state.refs) return;
+    const { guestInput, packageSelect, addonSelect, tableBody, totalValue, guestValue, packageValue } = state.refs;
+
+    const guests = Math.max(0, parseInt(guestInput.value, 10) || 0);
+    guestInput.value = guests;
+    guestValue.textContent = guests.toLocaleString();
+
+    const packageName = packageSelect.value;
+    const packageObj = packageData.find((pkg) => String(pkg.PACKAGE) === packageName);
+    packageValue.textContent = packageObj ? packageObj.PACKAGE : '—';
+
+    const selectedAddons = Array.from(addonSelect?.selectedOptions || []).map((opt) => opt.value);
+
+    tableBody.innerHTML = '';
+
+    const fragment = document.createDocumentFragment();
+    let subtotal = 0;
+    let rowCount = 0;
+
+    if (packageObj) {
+      const pkgPrice = asNumber(packageObj.PRICE);
+      const details = buildPackageDetails(packageObj);
+      fragment.appendChild(buildRow(packageObj.PACKAGE, details, 1, pkgPrice));
+      subtotal += pkgPrice;
+      rowCount++;
+    }
+
+    selectedAddons.forEach((addonName) => {
+      const addon = addonData.find((item) => String(item.ADDON) === addonName);
+      if (!addon) return;
+      const qty = Math.max(1, asNumber(addon.QTY) || 1);
+      const unit = asNumber(addon.PRICE);
+      const details = addon.DETAILS || addon.DESCRIPTION || '';
+      fragment.appendChild(buildRow(addon.ADDON, details, qty, unit));
+      subtotal += qty * unit;
+      rowCount++;
+    });
+
+    if (!rowCount) {
+      const emptyRow = document.createElement('tr');
+      emptyRow.className = 'empty-row';
+      const cell = document.createElement('td');
+      cell.colSpan = 5;
+      cell.textContent = 'Select a venue, package, or add-ons to populate the quote.';
+      emptyRow.appendChild(cell);
+      tableBody.appendChild(emptyRow);
+    } else {
+      tableBody.appendChild(fragment);
+      const totalRow = document.createElement('tr');
+      totalRow.className = 'total-row';
+      const totalLabel = document.createElement('td');
+      totalLabel.colSpan = 4;
+      totalLabel.textContent = 'Total';
+      const totalValueCell = document.createElement('td');
+      totalValueCell.textContent = formatCurrency(subtotal);
+      totalRow.append(totalLabel, totalValueCell);
+      tableBody.appendChild(totalRow);
+    }
+
+    totalValue.textContent = formatCurrency(subtotal);
+  }
+
+  function exportPdf() {
+    const table = document.getElementById('quoteTable');
+    const pdfLib = window.jspdf;
+    if (!pdfLib || !table) {
+      announceStatus('PDF export is unavailable in this environment.', 'error');
+      return;
+    }
+    const doc = new pdfLib.jsPDF();
+    doc.text('Event Quote', 14, 18);
+    doc.autoTable({ html: '#quoteTable', startY: 24 });
+    doc.save('quotation.pdf');
+  }
+
+  function exportDocx() {
+    const table = document.getElementById('quoteTable');
+    const docx = window.docx;
+    if (!docx?.Document || !table) {
+      announceStatus('DOCX export is unavailable in this environment.', 'error');
+      return;
+    }
+    const rows = Array.from(table.rows).map((tr) => new docx.TableRow({
+      children: Array.from(tr.cells).map((cell) => new docx.TableCell({
+        children: [new docx.Paragraph(cell.textContent)],
+      })),
+    }));
+    const document = new docx.Document({
+      sections: [
+        {
+          properties: {},
+          children: [
+            new docx.Paragraph({ text: 'Event Quote', heading: docx.HeadingLevel.HEADING_1 }),
+            new docx.Table({ rows }),
+          ],
+        },
+      ],
+    });
+    docx.Packer.toBlob(document).then((blob) => {
+      saveAs(blob, 'quotation.docx');
+    });
+  }
+
+  function exportXlsx() {
+    const table = document.getElementById('quoteTable');
+    if (!table) {
+      return;
+    }
+    const workbook = XLSX.utils.book_new();
+    const sheet = XLSX.utils.table_to_sheet(table);
+    XLSX.utils.book_append_sheet(workbook, sheet, 'Quotation');
+    XLSX.writeFile(workbook, 'quotation.xlsx');
+  }
+
+  function buildPackageDetails(pkg) {
+    const details = [];
+    const guests = parseInt(pkg.GUESTS, 10);
+    if (Number.isFinite(guests) && guests > 0) {
+      details.push(`${guests.toLocaleString()} guests included`);
+    }
+    if (pkg.DURATION) {
+      details.push(String(pkg.DURATION));
+    }
+    if (pkg.DESCRIPTION) {
+      details.push(String(pkg.DESCRIPTION));
+    } else if (pkg.DETAILS) {
+      details.push(String(pkg.DETAILS));
+    }
+    return details.join(' • ');
+  }
+
+  function buildRow(name, details, qty, price) {
+    const tr = document.createElement('tr');
+    const values = [
+      name || '—',
+      details || '—',
+      Number.isFinite(qty) ? qty.toLocaleString() : '1',
+      formatCurrency(price),
+      formatCurrency((Number.isFinite(qty) ? qty : 1) * price),
+    ];
+    values.forEach((value) => {
+      const td = document.createElement('td');
+      td.textContent = value;
+      tr.appendChild(td);
+    });
+    return tr;
+  }
+
+  function formatCurrency(value) {
+    return currencyFormatter.format(asNumber(value));
+  }
+
+  function announceStatus(message, tone) {
+    const status = state.refs?.status;
+    if (!status) return;
+    status.textContent = message || '';
+    status.classList.remove('is-error', 'is-success');
+    if (!message) return;
+    if (tone === 'error') {
+      status.classList.add('is-error');
+    } else if (tone === 'success') {
+      status.classList.add('is-success');
+    }
+  }
+
+  function asNumber(value) {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : 0;
+  }
+
+  function clone(item) {
+    return { ...item };
+  }
+})();
