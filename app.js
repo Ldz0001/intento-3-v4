@@ -2802,7 +2802,7 @@
       }
 
       const preventCurrencyWrap = (label) => (
-        typeof label === 'string' ? label.replace(/ /g, '\u202F') : label
+        typeof label === 'string' ? label.replace(/ /g, '\u00A0') : label
       );
 
       const head = [['Item', 'Details', 'Qty', 'Unit', 'Total']];
