@@ -1624,8 +1624,9 @@
       eventDateValue.textContent = formatEventDateForSummary(eventDate);
     }
     const eventDateInputValue = state.refs?.eventDateInput?.value || '';
-    const weekday = getIsoWeekday(eventDate);
-    const weekdayLabel = describeWeekday(weekday);
+    const hasEventDate = isValidDate(eventDate);
+    const weekday = hasEventDate ? getIsoWeekday(eventDate) : null;
+    const weekdayLabel = hasEventDate ? describeWeekday(weekday) : '';
 
     tableBody.innerHTML = '';
 
@@ -1688,7 +1689,7 @@
     let percentAdjustment = 0;
     let percentLabel = '';
     let flatDiscount = 0;
-    if (workbookModel && venueId) {
+    if (workbookModel && venueId && hasEventDate) {
       const percent = getPercentDiscount(eventDate);
       percentAdjustment = subtotal * percent;
       if (percentAdjustment) {
@@ -1785,7 +1786,7 @@
 
     updatePackageOptionLabels();
     updateAddonOptionLabels();
-    updateComparePricesTable(guests, eventDate, venueId, packageId, weekdayLabel);
+    updateComparePricesTable(guests, eventDate, venueId, packageId, hasEventDate ? weekdayLabel : '');
   }
 
   function updateComparePricesTable(guestCount, eventDate, selectedVenueId, selectedPackageId, weekdayLabel) {
@@ -2508,7 +2509,7 @@
     if (manualDate) {
       return manualDate;
     }
-    if (workbookModel?.eventDate instanceof Date && !Number.isNaN(workbookModel.eventDate.valueOf())) {
+    if (isValidDate(workbookModel?.eventDate)) {
       return workbookModel.eventDate;
     }
     const stored = storage.get(STORAGE_KEYS.EVENT_DATE);
@@ -2516,7 +2517,11 @@
     if (storedDate) {
       return storedDate;
     }
-    return new Date();
+    return null;
+  }
+
+  function isValidDate(value) {
+    return value instanceof Date && !Number.isNaN(value.valueOf());
   }
 
   function parseDateInputValue(value) {
@@ -2535,7 +2540,7 @@
       }
     }
     const fallback = new Date(normalized);
-    return Number.isNaN(fallback.valueOf()) ? null : fallback;
+    return isValidDate(fallback) ? fallback : null;
   }
 
   function toInputDateString(date) {
@@ -2560,21 +2565,18 @@
   }
 
   function getPercentDiscount(eventDate) {
-    const referenceDate = eventDate instanceof Date && !Number.isNaN(eventDate.valueOf())
-      ? eventDate
-      : new Date();
-    const weekday = getIsoWeekday(referenceDate);
+    if (!isValidDate(eventDate)) {
+      return 0;
+    }
+    const weekday = getIsoWeekday(eventDate);
     return weekday === 5 || weekday === 7 ? WEEKEND_PERCENT_DISCOUNT : 0;
   }
 
   function getFlatDiscount(venueId, eventDate) {
-    if (!workbookModel) {
+    if (!workbookModel || !isValidDate(eventDate)) {
       return 0;
     }
-    const referenceDate = eventDate instanceof Date && !Number.isNaN(eventDate.valueOf())
-      ? eventDate
-      : new Date();
-    const weekday = getIsoWeekday(referenceDate);
+    const weekday = getIsoWeekday(eventDate);
     const key = `${normalizeId(venueId)}|${weekday}`;
     return workbookModel.flatDiscounts.get(key) || 0;
   }
