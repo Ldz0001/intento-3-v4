@@ -2605,17 +2605,43 @@
       const totalValue = Number(entry.total);
       budgetLine.forecast = Number.isFinite(totalValue) ? totalValue : 0;
       const vendorLines = Array.isArray(budgetLine.vendors) ? [...budgetLine.vendors] : [];
-      const services = Array.isArray(entry.quoteLine?.services) ? entry.quoteLine.services : [];
+      const services = Array.isArray(entry.quoteLine?.services) ? entry.quoteLine.services.slice() : [];
+      const fallbackServiceLabel = (() => {
+        const isVenueLine = /venue/i.test(entry.cat || '') || entry.type === 'venue';
+        if (isVenueLine) {
+          return venueName ? `Venue - ${venueName}` : 'Venue';
+        }
+        if (entry.item) {
+          return entry.item;
+        }
+        return 'Service';
+      })();
+
+      if (!services.length) {
+        services.push({ name: fallbackServiceLabel, quantity: entry.quantity });
+      }
+
       services.forEach((service, index) => {
+        const existingVendor = vendorLines[index] || {};
+        const preferredQty = Number(service?.quantity ?? entry.quantity ?? existingVendor.qty ?? budgetLine.qty);
+        const normalizedQty = Number.isFinite(preferredQty) && preferredQty !== 0 ? preferredQty : 1;
+
         if (!vendorLines[index]) {
           vendorLines[index] = {
-            service: service?.name || `Service ${index + 1}`,
+            service: service?.name || fallbackServiceLabel || `Service ${index + 1}`,
             vendor: '',
+            qty: normalizedQty,
             price: 0,
             total: 0,
           };
-        } else if (service?.name && !vendorLines[index].service) {
-          vendorLines[index] = { ...vendorLines[index], service: service.name };
+        } else {
+          vendorLines[index] = {
+            ...existingVendor,
+            service: existingVendor.service || service?.name || fallbackServiceLabel || `Service ${index + 1}`,
+            qty: Number.isFinite(Number(existingVendor.qty)) && Number(existingVendor.qty) !== 0
+              ? existingVendor.qty
+              : normalizedQty,
+          };
         }
       });
       budgetLine.vendors = vendorLines;
@@ -2623,8 +2649,12 @@
         (sum, vendor) => sum + Number(vendor?.total ?? vendor?.price ?? 0),
         0
       );
+      const hasVendorTotals = vendorLines.some((vendor) => {
+        const amount = Number(vendor?.total ?? vendor?.price ?? 0);
+        return Number.isFinite(amount) && amount !== 0;
+      });
       const existingActual = Number(budgetLine.actual);
-      budgetLine.actual = vendorLines.length
+      budgetLine.actual = hasVendorTotals
         ? vendorActual
         : Number.isFinite(existingActual)
           ? existingActual
