@@ -278,6 +278,43 @@
   let packageData = [];
   let addonData = [];
 
+  function deriveCatalogPrice(entry) {
+    if (!entry) {
+      return null;
+    }
+    const prices = Array.isArray(entry.pricing)
+      ? entry.pricing.map((item) => Number(item.price)).filter((value) => Number.isFinite(value))
+      : [];
+    if (prices.length) {
+      return Math.min(...prices);
+    }
+    if (Number.isFinite(Number(entry.price))) {
+      return Number(entry.price);
+    }
+    return null;
+  }
+
+  function broadcastVendorCatalogUpdate() {
+    const catalog = {
+      packages: packageData.map((item) => ({
+        id: item.id,
+        name: item.name,
+        price: deriveCatalogPrice(item),
+      })),
+      addons: addonData.map((item) => ({
+        id: item.id,
+        name: item.name,
+        price: deriveCatalogPrice(item),
+      })),
+    };
+    if (typeof window !== 'undefined') {
+      window.vendorCatalog = catalog;
+      if (typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('vendorCatalogUpdated', { detail: catalog }));
+      }
+    }
+  }
+
   const HEAT_CLASSNAMES = ['heat-best', 'heat-good', 'heat-mid', 'heat-warm', 'heat-hot'];
   const HEAT_PALETTES = {
     light: {
@@ -499,6 +536,7 @@
     venueData = DEFAULT_DATA.venues.map(clone);
     packageData = DEFAULT_DATA.packages.map(clone);
     addonData = DEFAULT_DATA.addons.map(clone);
+    broadcastVendorCatalogUpdate();
     applyInitialEventDate(null);
     refreshSelectors();
     updateQuote();
@@ -666,6 +704,7 @@
     venueData = parsed.venues.map(clone);
     packageData = parsed.packages.map(clone);
     addonData = parsed.addons.map(clone);
+    broadcastVendorCatalogUpdate();
     if (!options.restored) {
       state.savedQuoteRefs.eventId = '';
       state.savedQuoteRefs.budgetLineIds = {};
