@@ -2419,7 +2419,8 @@
       return;
     }
 
-    const venue = venueData.find((item) => normalizeId(item.id) === quote.venueId);
+    const venueId = quote.venueId;
+    const venue = venueData.find((item) => normalizeId(item.id) === venueId);
     const packageName = quote.packageName || '';
     const venueName = quote.venueName || venue?.name || '';
     const childrenCount = Number.isFinite(quote.children) ? Math.max(0, Math.round(quote.children)) : 0;
@@ -2470,37 +2471,34 @@
     const tasksById = new Map(taskList.map((task) => [task.id, task]));
 
     const rawLines = Array.isArray(quote.quoteLines) ? quote.quoteLines : [];
-      const basePackageLabel = `${venueName || 'Venue'} + ${packageName || 'Package'}`.trim();
-      const tierLabel = quote.tierLabel || (quote.tierId ? `Tier ${quote.tierId}` : '');
-      const MIN_TOTAL = 0.01;
-      const lineEntries = [];
+    const basePackageLabel = `${venueName || 'Venue'} + ${packageName || 'Package'}`.trim();
+    const tierLabel = quote.tierLabel || (quote.tierId ? `Tier ${quote.tierId}` : '');
+    const MIN_TOTAL = 0.01;
+    const lineEntries = [];
+    const legacyVenueKey = quote.venueId
+      ? buildQuoteLineKey('venue', quote.venueId, venueName || '')
+      : null;
+    const legacyVenueBudgetLine = legacyVenueKey
+      ? budgetLines.find((line) => line.quoteKey === quoteKey && line.quoteLineKey === legacyVenueKey) || null
+      : null;
+    const legacyVenueTask = legacyVenueKey
+      ? taskList.find((task) => task.quoteKey === quoteKey && task.quoteLineKey === legacyVenueKey) || null
+      : null;
 
-      if (venueName) {
-        lineEntries.push({
-          key: buildQuoteLineKey('venue', venueId, venueName),
-          cat: 'Venue',
-          item: venueName,
-          quantity: 1,
-          unit: 0,
-          total: 0,
-          details: 'Venue assignment from quote',
-          type: 'venue',
-          quoteLine: null,
-        });
-      }
-
-      const packageLine = rawLines.find((line) => line.type === 'package');
-      if (packageLine && Math.abs(Number(packageLine.total || 0)) >= MIN_TOTAL) {
-        lineEntries.push({
-          key: buildQuoteLineKey('package', packageLine.id || quote.packageId, packageName || packageLine.name),
-          cat: 'Package',
-          item: tierLabel ? `${basePackageLabel} (${tierLabel})` : basePackageLabel,
-          quantity: Math.max(1, Number(packageLine.quantity || 1)),
-          unit: Number(packageLine.unitPrice || 0),
+    const packageLine = rawLines.find((line) => line.type === 'package');
+    if (packageLine && Math.abs(Number(packageLine.total || 0)) >= MIN_TOTAL) {
+      lineEntries.push({
+        key: buildQuoteLineKey('package', packageLine.id || quote.packageId, packageName || packageLine.name),
+        cat: 'Package',
+        item: tierLabel ? `${basePackageLabel} (${tierLabel})` : basePackageLabel,
+        quantity: Math.max(1, Number(packageLine.quantity || 1)),
+        unit: Number(packageLine.unitPrice || 0),
         total: Number(packageLine.total || 0),
         details: packageLine.details || '',
         type: 'package',
         quoteLine: packageLine,
+        legacyBudgetLine: legacyVenueBudgetLine,
+        legacyTask: legacyVenueTask,
       });
     }
 
@@ -2545,17 +2543,19 @@
         });
       });
 
-      if (!lineEntries.length) {
-        lineEntries.push({
-          key: buildQuoteLineKey('package', quote.packageId, packageName || 'Quote'),
-          cat: 'Package',
-          item: tierLabel ? `${basePackageLabel} (${tierLabel})` : basePackageLabel,
-          quantity: 1,
-          unit: Number(quote.total || 0),
+    if (!lineEntries.length) {
+      lineEntries.push({
+        key: buildQuoteLineKey('package', quote.packageId, packageName || 'Quote'),
+        cat: 'Package',
+        item: tierLabel ? `${basePackageLabel} (${tierLabel})` : basePackageLabel,
+        quantity: 1,
+        unit: Number(quote.total || 0),
         total: Number(quote.total || 0),
         details: '',
         type: 'package',
         quoteLine: null,
+        legacyBudgetLine: legacyVenueBudgetLine,
+        legacyTask: legacyVenueTask,
       });
     }
 
@@ -2564,7 +2564,7 @@
     const keptBudgetIds = new Set();
 
     lineEntries.forEach((entry) => {
-      const savedId = savedLineRefs?.[entry.key];
+      const savedId = savedLineRefs?.[entry.key] || entry.legacyBudgetLine?.id;
       let budgetLine = (savedId && budgetById.get(savedId)) || null;
       if (!budgetLine) {
         budgetLine = budgetLines.find((line) => line.quoteKey === quoteKey && line.quoteLineKey === entry.key) || null;
@@ -2579,19 +2579,28 @@
       budgetLine.item = entry.item;
       const qtyValue = Number(entry.quantity);
       budgetLine.qty = Number.isFinite(qtyValue) && qtyValue !== 0 ? qtyValue : 1;
-        const unitValue = Number(entry.unit);
-        budgetLine.unit = Number.isFinite(unitValue) ? unitValue : 0;
-        const existingTax = Number(budgetLine.tax);
-        budgetLine.tax = Number.isFinite(existingTax) ? existingTax : 0;
-        const totalValue = Number(entry.total);
-        budgetLine.forecast = Number.isFinite(totalValue) ? totalValue : 0;
-        const existingActual = Number(budgetLine.actual);
-        budgetLine.actual = Number.isFinite(existingActual) ? existingActual : 0;
-        budgetLine.catalogRefId = entry.quoteLine?.id || budgetLine.catalogRefId || '';
-        budgetLine.catalogType = entry.type || budgetLine.catalogType || '';
-        budgetLine.quoteKey = quoteKey;
-        budgetLine.quoteLineKey = entry.key;
-        budgetLine.confirmed = Boolean(budgetLine.confirmed);
+      const unitValue = Number(entry.unit);
+      budgetLine.unit = Number.isFinite(unitValue) ? unitValue : 0;
+      const existingTax = Number(budgetLine.tax);
+      budgetLine.tax = Number.isFinite(existingTax) ? existingTax : 0;
+      const totalValue = Number(entry.total);
+      budgetLine.forecast = Number.isFinite(totalValue) ? totalValue : 0;
+      const vendorLines = Array.isArray(budgetLine.vendors) ? budgetLine.vendors : [];
+      const vendorActual = vendorLines.reduce(
+        (sum, vendor) => sum + Number(vendor?.total ?? vendor?.price ?? 0),
+        0
+      );
+      const existingActual = Number(budgetLine.actual);
+      budgetLine.actual = vendorLines.length
+        ? vendorActual
+        : Number.isFinite(existingActual)
+          ? existingActual
+          : 0;
+      budgetLine.catalogRefId = entry.quoteLine?.id || budgetLine.catalogRefId || '';
+      budgetLine.catalogType = entry.type || budgetLine.catalogType || '';
+      budgetLine.quoteKey = quoteKey;
+      budgetLine.quoteLineKey = entry.key;
+      budgetLine.confirmed = Boolean(budgetLine.confirmed);
 
       const detailNote = entry.details ? String(entry.details) : '';
       if (entry.type === 'package' && !budgetLine.confirmed) {
@@ -2630,7 +2639,7 @@
     const keptTaskIds = new Set();
 
     lineEntries.forEach((entry) => {
-      const savedId = savedTaskRefs?.[entry.key];
+      const savedId = savedTaskRefs?.[entry.key] || entry.legacyTask?.id;
       let taskRecord = (savedId && tasksById.get(savedId)) || null;
       if (!taskRecord) {
         taskRecord = taskList.find((task) => task.quoteKey === quoteKey && task.quoteLineKey === entry.key) || null;
