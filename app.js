@@ -2623,8 +2623,12 @@
         (sum, vendor) => sum + Number(vendor?.total ?? vendor?.price ?? 0),
         0
       );
+      const hasVendorTotals = vendorLines.some((vendor) => {
+        const amount = Number(vendor?.total ?? vendor?.price ?? 0);
+        return Number.isFinite(amount) && amount !== 0;
+      });
       const existingActual = Number(budgetLine.actual);
-      budgetLine.actual = vendorLines.length
+      budgetLine.actual = hasVendorTotals
         ? vendorActual
         : Number.isFinite(existingActual)
           ? existingActual
