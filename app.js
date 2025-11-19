@@ -2419,7 +2419,8 @@
       return;
     }
 
-    const venue = venueData.find((item) => normalizeId(item.id) === quote.venueId);
+    const venueId = quote.venueId;
+    const venue = venueData.find((item) => normalizeId(item.id) === venueId);
     const packageName = quote.packageName || '';
     const venueName = quote.venueName || venue?.name || '';
     const childrenCount = Number.isFinite(quote.children) ? Math.max(0, Math.round(quote.children)) : 0;
