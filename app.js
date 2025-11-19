@@ -2564,7 +2564,7 @@
     const keptBudgetIds = new Set();
 
     lineEntries.forEach((entry) => {
-      const savedId = savedLineRefs?.[entry.key] || entry.legacyBudgetLine?.id;
+      const savedId = entry.legacyBudgetLine?.id || savedLineRefs?.[entry.key];
       let budgetLine = (savedId && budgetById.get(savedId)) || null;
       if (!budgetLine) {
         budgetLine = budgetLines.find((line) => line.quoteKey === quoteKey && line.quoteLineKey === entry.key) || null;
