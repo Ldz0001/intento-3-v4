@@ -278,6 +278,43 @@
   let packageData = [];
   let addonData = [];
 
+  function deriveCatalogPrice(entry) {
+    if (!entry) {
+      return null;
+    }
+    const prices = Array.isArray(entry.pricing)
+      ? entry.pricing.map((item) => Number(item.price)).filter((value) => Number.isFinite(value))
+      : [];
+    if (prices.length) {
+      return Math.min(...prices);
+    }
+    if (Number.isFinite(Number(entry.price))) {
+      return Number(entry.price);
+    }
+    return null;
+  }
+
+  function broadcastVendorCatalogUpdate() {
+    const catalog = {
+      packages: packageData.map((item) => ({
+        id: item.id,
+        name: item.name,
+        price: deriveCatalogPrice(item),
+      })),
+      addons: addonData.map((item) => ({
+        id: item.id,
+        name: item.name,
+        price: deriveCatalogPrice(item),
+      })),
+    };
+    if (typeof window !== 'undefined') {
+      window.vendorCatalog = catalog;
+      if (typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('vendorCatalogUpdated', { detail: catalog }));
+      }
+    }
+  }
+
   const HEAT_CLASSNAMES = ['heat-best', 'heat-good', 'heat-mid', 'heat-warm', 'heat-hot'];
   const HEAT_PALETTES = {
     light: {
@@ -499,6 +536,7 @@
     venueData = DEFAULT_DATA.venues.map(clone);
     packageData = DEFAULT_DATA.packages.map(clone);
     addonData = DEFAULT_DATA.addons.map(clone);
+    broadcastVendorCatalogUpdate();
     applyInitialEventDate(null);
     refreshSelectors();
     updateQuote();
@@ -666,6 +704,7 @@
     venueData = parsed.venues.map(clone);
     packageData = parsed.packages.map(clone);
     addonData = parsed.addons.map(clone);
+    broadcastVendorCatalogUpdate();
     if (!options.restored) {
       state.savedQuoteRefs.eventId = '';
       state.savedQuoteRefs.budgetLineIds = {};
@@ -2431,19 +2470,33 @@
     const tasksById = new Map(taskList.map((task) => [task.id, task]));
 
     const rawLines = Array.isArray(quote.quoteLines) ? quote.quoteLines : [];
-    const basePackageLabel = `${venueName || 'Venue'} + ${packageName || 'Package'}`.trim();
-    const tierLabel = quote.tierLabel || (quote.tierId ? `Tier ${quote.tierId}` : '');
-    const MIN_TOTAL = 0.01;
-    const lineEntries = [];
+      const basePackageLabel = `${venueName || 'Venue'} + ${packageName || 'Package'}`.trim();
+      const tierLabel = quote.tierLabel || (quote.tierId ? `Tier ${quote.tierId}` : '');
+      const MIN_TOTAL = 0.01;
+      const lineEntries = [];
 
-    const packageLine = rawLines.find((line) => line.type === 'package');
-    if (packageLine && Math.abs(Number(packageLine.total || 0)) >= MIN_TOTAL) {
-      lineEntries.push({
-        key: buildQuoteLineKey('package', packageLine.id || quote.packageId, packageName || packageLine.name),
-        cat: 'Quotation',
-        item: tierLabel ? `${basePackageLabel} (${tierLabel})` : basePackageLabel,
-        quantity: Math.max(1, Number(packageLine.quantity || 1)),
-        unit: Number(packageLine.unitPrice || 0),
+      if (venueName) {
+        lineEntries.push({
+          key: buildQuoteLineKey('venue', venueId, venueName),
+          cat: 'Venue',
+          item: venueName,
+          quantity: 1,
+          unit: 0,
+          total: 0,
+          details: 'Venue assignment from quote',
+          type: 'venue',
+          quoteLine: null,
+        });
+      }
+
+      const packageLine = rawLines.find((line) => line.type === 'package');
+      if (packageLine && Math.abs(Number(packageLine.total || 0)) >= MIN_TOTAL) {
+        lineEntries.push({
+          key: buildQuoteLineKey('package', packageLine.id || quote.packageId, packageName || packageLine.name),
+          cat: 'Package',
+          item: tierLabel ? `${basePackageLabel} (${tierLabel})` : basePackageLabel,
+          quantity: Math.max(1, Number(packageLine.quantity || 1)),
+          unit: Number(packageLine.unitPrice || 0),
         total: Number(packageLine.total || 0),
         details: packageLine.details || '',
         type: 'package',
@@ -2492,13 +2545,13 @@
         });
       });
 
-    if (!lineEntries.length) {
-      lineEntries.push({
-        key: buildQuoteLineKey('package', quote.packageId, packageName || 'Quote'),
-        cat: 'Quotation',
-        item: tierLabel ? `${basePackageLabel} (${tierLabel})` : basePackageLabel,
-        quantity: 1,
-        unit: Number(quote.total || 0),
+      if (!lineEntries.length) {
+        lineEntries.push({
+          key: buildQuoteLineKey('package', quote.packageId, packageName || 'Quote'),
+          cat: 'Package',
+          item: tierLabel ? `${basePackageLabel} (${tierLabel})` : basePackageLabel,
+          quantity: 1,
+          unit: Number(quote.total || 0),
         total: Number(quote.total || 0),
         details: '',
         type: 'package',
@@ -2526,17 +2579,19 @@
       budgetLine.item = entry.item;
       const qtyValue = Number(entry.quantity);
       budgetLine.qty = Number.isFinite(qtyValue) && qtyValue !== 0 ? qtyValue : 1;
-      const unitValue = Number(entry.unit);
-      budgetLine.unit = Number.isFinite(unitValue) ? unitValue : 0;
-      const existingTax = Number(budgetLine.tax);
-      budgetLine.tax = Number.isFinite(existingTax) ? existingTax : 0;
-      const totalValue = Number(entry.total);
-      budgetLine.forecast = Number.isFinite(totalValue) ? totalValue : 0;
-      const existingActual = Number(budgetLine.actual);
-      budgetLine.actual = Number.isFinite(existingActual) ? existingActual : 0;
-      budgetLine.quoteKey = quoteKey;
-      budgetLine.quoteLineKey = entry.key;
-      budgetLine.confirmed = Boolean(budgetLine.confirmed);
+        const unitValue = Number(entry.unit);
+        budgetLine.unit = Number.isFinite(unitValue) ? unitValue : 0;
+        const existingTax = Number(budgetLine.tax);
+        budgetLine.tax = Number.isFinite(existingTax) ? existingTax : 0;
+        const totalValue = Number(entry.total);
+        budgetLine.forecast = Number.isFinite(totalValue) ? totalValue : 0;
+        const existingActual = Number(budgetLine.actual);
+        budgetLine.actual = Number.isFinite(existingActual) ? existingActual : 0;
+        budgetLine.catalogRefId = entry.quoteLine?.id || budgetLine.catalogRefId || '';
+        budgetLine.catalogType = entry.type || budgetLine.catalogType || '';
+        budgetLine.quoteKey = quoteKey;
+        budgetLine.quoteLineKey = entry.key;
+        budgetLine.confirmed = Boolean(budgetLine.confirmed);
 
       const detailNote = entry.details ? String(entry.details) : '';
       if (entry.type === 'package' && !budgetLine.confirmed) {
