@@ -175,6 +175,7 @@
     currentQuote: null,
     backgroundName: '',
     savedQuoteRefs: {
+      quoteKey: '',
       eventId: '',
       budgetLineIds: {},
       taskIds: {},
@@ -192,6 +193,7 @@
     WORKBOOK_BASE64: 'quoteBuilder.workbookBase64',
     WORKBOOK_NAME: 'quoteBuilder.workbookName',
     EVENT_DATE: 'quoteBuilder.eventDate',
+    QUOTE_KEY: 'quoteBuilder.quoteKey',
     EVENT_ID: 'quoteBuilder.eventId',
     BUDGET_LINE_IDS: 'quoteBuilder.budgetLineIds',
     TASK_IDS: 'quoteBuilder.taskIds',
@@ -460,6 +462,7 @@
     state.backgroundName = storage.get(STORAGE_KEYS.QUOTE_BACKGROUND_NAME) || '';
     updateBackgroundStatus();
 
+    state.savedQuoteRefs.quoteKey = storage.get(STORAGE_KEYS.QUOTE_KEY) || '';
     state.savedQuoteRefs.eventId = storage.get(STORAGE_KEYS.EVENT_ID) || '';
     state.savedQuoteRefs.budgetLineIds = storage.getJson(STORAGE_KEYS.BUDGET_LINE_IDS, {});
     if (!state.savedQuoteRefs.budgetLineIds || typeof state.savedQuoteRefs.budgetLineIds !== 'object') {
@@ -525,9 +528,11 @@
 
   function loadDefaultData() {
     clearPersistedWorkbook();
+    state.savedQuoteRefs.quoteKey = '';
     state.savedQuoteRefs.eventId = '';
     state.savedQuoteRefs.budgetLineIds = {};
     state.savedQuoteRefs.taskIds = {};
+    storage.remove(STORAGE_KEYS.QUOTE_KEY);
     storage.remove(STORAGE_KEYS.EVENT_ID);
     storage.remove(STORAGE_KEYS.BUDGET_LINE_IDS);
     storage.remove(STORAGE_KEYS.TASK_IDS);
@@ -706,9 +711,11 @@
     addonData = parsed.addons.map(clone);
     broadcastVendorCatalogUpdate();
     if (!options.restored) {
+      state.savedQuoteRefs.quoteKey = '';
       state.savedQuoteRefs.eventId = '';
       state.savedQuoteRefs.budgetLineIds = {};
       state.savedQuoteRefs.taskIds = {};
+      storage.remove(STORAGE_KEYS.QUOTE_KEY);
       storage.remove(STORAGE_KEYS.EVENT_ID);
       storage.remove(STORAGE_KEYS.BUDGET_LINE_IDS);
       storage.remove(STORAGE_KEYS.TASK_IDS);
@@ -2413,11 +2420,19 @@
       announceStatus('Add the event date before sending the quote to the budget.', 'error');
       return;
     }
+    const quoteKey = buildQuoteKey({ ...quote, eventDateInput: eventDateIso });
     const storeRef = window.store;
     if (!storeRef || typeof storeRef.upsert !== 'function') {
       announceStatus('Budget data store is unavailable. Refresh and try again.', 'error');
       return;
     }
+
+    if (state.savedQuoteRefs.quoteKey && state.savedQuoteRefs.quoteKey !== quoteKey) {
+      state.savedQuoteRefs.eventId = '';
+      state.savedQuoteRefs.budgetLineIds = {};
+      state.savedQuoteRefs.taskIds = {};
+    }
+    state.savedQuoteRefs.quoteKey = quoteKey;
 
     const venueId = quote.venueId;
     const venue = venueData.find((item) => normalizeId(item.id) === venueId);
@@ -2435,15 +2450,15 @@
     const eventTitle = `${venueName || 'Quote'} — ${packageName || 'Package'} — ${guestsLabel}`;
 
     const events = Array.isArray(storeRef.data?.events) ? storeRef.data.events : [];
+    const savedEventId = state.savedQuoteRefs.eventId || null;
     let eventRecord = null;
-    if (state.savedQuoteRefs.eventId) {
-      eventRecord = events.find((item) => item.id === state.savedQuoteRefs.eventId) || null;
-    }
-    if (!eventRecord) {
+
+    if (savedEventId) {
       eventRecord = events.find(
-        (item) => item && item.title === eventTitle && item.eventDate === eventDateIso
-      ) || null;
+        (item) => item.id === savedEventId && (!item.quoteKey || item.quoteKey === quoteKey)
+      );
     }
+
     if (!eventRecord) {
       eventRecord = { id: null };
     }
@@ -2456,13 +2471,13 @@
     eventRecord.address = venue?.location || eventRecord.address || '';
     eventRecord.lat = eventRecord.lat ?? venue?.lat ?? null;
     eventRecord.lon = eventRecord.lon ?? venue?.lon ?? null;
+    eventRecord.quoteKey = quoteKey;
 
-    const savedEventId = storeRef.upsert('events', eventRecord);
-    eventRecord.id = savedEventId;
-    state.savedQuoteRefs.eventId = savedEventId;
-    storage.set(STORAGE_KEYS.EVENT_ID, savedEventId);
+    const storedEventId = storeRef.upsert('events', eventRecord);
+    eventRecord.id = storedEventId;
+    state.savedQuoteRefs.eventId = storedEventId;
+    storage.set(STORAGE_KEYS.EVENT_ID, storedEventId);
 
-    const quoteKey = buildQuoteKey({ ...quote, eventDateInput: eventDateIso });
     const savedLineRefs = state.savedQuoteRefs.budgetLineIds || {};
     const savedTaskRefs = state.savedQuoteRefs.taskIds || {};
     const budgetLines = Array.isArray(storeRef.data?.budget) ? storeRef.data.budget : [];
@@ -2564,7 +2579,7 @@
     const keptBudgetIds = new Set();
 
     lineEntries.forEach((entry) => {
-      const savedId = savedLineRefs?.[entry.key] || entry.legacyBudgetLine?.id;
+      const savedId = entry.legacyBudgetLine?.id || savedLineRefs?.[entry.key];
       let budgetLine = (savedId && budgetById.get(savedId)) || null;
       if (!budgetLine) {
         budgetLine = budgetLines.find((line) => line.quoteKey === quoteKey && line.quoteLineKey === entry.key) || null;
@@ -2574,7 +2589,7 @@
       }
 
       const wasNew = !budgetLine.id;
-      budgetLine.eventId = savedEventId;
+      budgetLine.eventId = storedEventId;
       budgetLine.cat = entry.cat;
       budgetLine.item = entry.item;
       const qtyValue = Number(entry.quantity);
@@ -2585,7 +2600,21 @@
       budgetLine.tax = Number.isFinite(existingTax) ? existingTax : 0;
       const totalValue = Number(entry.total);
       budgetLine.forecast = Number.isFinite(totalValue) ? totalValue : 0;
-      const vendorLines = Array.isArray(budgetLine.vendors) ? budgetLine.vendors : [];
+      const vendorLines = Array.isArray(budgetLine.vendors) ? [...budgetLine.vendors] : [];
+      const services = Array.isArray(entry.quoteLine?.services) ? entry.quoteLine.services : [];
+      services.forEach((service, index) => {
+        if (!vendorLines[index]) {
+          vendorLines[index] = {
+            service: service?.name || `Service ${index + 1}`,
+            vendor: '',
+            price: 0,
+            total: 0,
+          };
+        } else if (service?.name && !vendorLines[index].service) {
+          vendorLines[index] = { ...vendorLines[index], service: service.name };
+        }
+      });
+      budgetLine.vendors = vendorLines;
       const vendorActual = vendorLines.reduce(
         (sum, vendor) => sum + Number(vendor?.total ?? vendor?.price ?? 0),
         0
@@ -2649,7 +2678,7 @@
       }
 
       const isNewTask = !taskRecord.id;
-      taskRecord.eventId = savedEventId;
+      taskRecord.eventId = storedEventId;
       taskRecord.title = `Confirm ${entry.item}`;
       taskRecord.assignedTo = taskRecord.assignedTo || '';
       const isConfirmed = Boolean(entry.budgetLine?.confirmed);
@@ -2703,6 +2732,7 @@
 
     state.savedQuoteRefs.budgetLineIds = nextBudgetRefs;
     state.savedQuoteRefs.taskIds = nextTaskRefs;
+    storage.set(STORAGE_KEYS.QUOTE_KEY, quoteKey);
     storage.setJson(STORAGE_KEYS.BUDGET_LINE_IDS, nextBudgetRefs);
     storage.setJson(STORAGE_KEYS.TASK_IDS, nextTaskRefs);
 
