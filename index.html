@@ -977,7 +977,7 @@ Perf notes:
 <div aria-label="Vendor sheet" class="table-wrap" role="region">
 <table id="tblVendors">
 <thead><tr>
-<th scope="col">Name</th><th scope="col">Company</th><th scope="col">Role</th><th scope="col">Events</th><th scope="col">Email</th><th scope="col">Phone</th><th scope="col">Contract</th><th scope="col">Payment</th><th scope="col">Docs</th><th class="no-print" scope="col">Actions</th>
+<th scope="col">Name</th><th scope="col">Company</th><th scope="col">Role</th><th scope="col">Services</th><th scope="col">Email</th><th scope="col">Phone</th><th scope="col">Contract</th><th scope="col">Docs</th><th class="no-print" scope="col">Actions</th>
 </tr></thead><tbody></tbody>
 </table>
 </div>
@@ -991,12 +991,18 @@ Perf notes:
 <div><div class="small">Email</div><input data-testid="vendor-email" id="vEmail" inputmode="email" type="email"/></div>
 <div><div class="small">Phone</div><input data-testid="vendor-phone" id="vPhone" inputmode="tel"/></div>
 <div><div class="small">Contract</div><select data-testid="vendor-contract" id="vContract"><option>Draft</option><option>Sent</option><option>Signed</option></select></div>
-<div><div class="small">Payment</div><select data-testid="vendor-payment" id="vPayment"><option>Due</option><option>Paid</option><option>Overdue</option></select></div>
 <div><div class="small">Docs (comma list)</div><input data-testid="vendor-docs" id="vDocs" placeholder="e.g., W9, Insurance"/></div>
 <div style="grid-column:1 / -1;">
-<div class="small">Linked Events</div>
-<select aria-describedby="vendorEventsHint" class="multi-select" data-testid="vendor-events" id="vEvents" multiple=""></select>
-<div class="small muted" id="vendorEventsHint">Hold Ctrl/⌘ to select multiple events.</div>
+<div class="small">Services &amp; quotes</div>
+<div class="grid grid-4 gap-tight">
+  <div><div class="small">Type</div><select id="vServiceType"><option value="package">Package</option><option value="addon">Add-on</option><option value="custom" selected="">Custom</option></select></div>
+  <div><div class="small">Database ID</div><select id="vServiceRef"><option value="">Select package/add-on</option></select></div>
+  <div><div class="small">Service name</div><input id="vServiceName" placeholder="e.g., Dinner package"/></div>
+  <div><div class="small">Price</div><input id="vServicePrice" min="0" step="0.01" type="number"/></div>
+</div>
+<div class="small muted" id="vendorServiceHint">Package/Add-on options load from your database; name/price auto-fill when you pick an ID.</div>
+<div class="row" style="margin-top:6px"><button class="ghost" id="btnAddVendorService" type="button"><svg class="icon"><use href="#ic-plus"></use></svg> Add service</button></div>
+<ul class="pill-list" id="vendorServicesList" style="margin-top:6px"></ul>
 </div>
 </form>
 <div class="row" style="margin-top:10px;">
@@ -1013,13 +1019,15 @@ Perf notes:
 <div aria-label="Budget lines" class="table-wrap" role="region">
 <table id="tblBudget">
 <thead><tr>
-<th scope="col">Event</th><th scope="col">Category</th><th scope="col">Item</th><th scope="col">Qty</th><th scope="col">Unit Cost</th><th scope="col">Tax %</th><th scope="col">Forecast</th><th scope="col">Actual</th><th scope="col">Variance</th><th scope="col">Confirmation</th><th class="no-print" scope="col">Actions</th>
+<th scope="col">Event</th><th scope="col">Category</th><th scope="col">Item</th><th scope="col">Vendor</th><th scope="col">Qty</th><th scope="col">Unit Cost</th><th scope="col">Tax %</th><th scope="col">Forecast</th><th scope="col">Actual</th><th scope="col">Variance</th><th scope="col">Vendor Status</th><th scope="col">Payment</th><th scope="col">Proof</th><th scope="col">Confirmation</th><th class="no-print" scope="col">Actions</th>
 </tr></thead><tbody></tbody>
 <tfoot><tr>
-<th colspan="6" scope="row">Totals</th>
+<th colspan="7" scope="row">Totals</th>
 <th aria-live="polite" id="sumForecast">0.00</th>
 <th aria-live="polite" id="sumActual">0.00</th>
 <th aria-live="polite" id="sumVariance">0.00</th>
+<th></th>
+<th></th>
 <th></th>
 <th></th>
 </tr></tfoot>
@@ -1027,16 +1035,23 @@ Perf notes:
 </div>
 <div class="hr"></div>
 <h3>Budget Line Form</h3>
-<form class="grid grid-5 gap-tight" onsubmit="return false;">
+<form class="grid grid-6 gap-tight" onsubmit="return false;">
 <input data-testid="budget-id" id="bId" type="hidden"/>
+<input id="bCatalogRef" type="hidden"/>
+<input id="bCatalogType" type="hidden"/>
 <div><div class="small">Event*</div><select data-testid="budget-event" id="bEvent" required=""></select></div>
 <div><div class="small">Category*</div><input data-testid="budget-cat" id="bCat" placeholder="e.g., Venue" required=""/></div>
 <div><div class="small">Item*</div><input data-testid="budget-item" id="bItem" placeholder="e.g., Ballroom" required=""/></div>
+<div><div class="small">Vendor</div><select data-testid="budget-vendor" id="bVendor"></select></div>
+<div><div class="small">Service</div><select id="bService"></select></div>
 <div><div class="small">Qty</div><input data-testid="budget-qty" id="bQty" min="0" step="1" type="number" value="1"/></div>
 <div><div class="small">Unit Cost</div><input data-testid="budget-unit" id="bUnit" min="0" step="0.01" type="number" value="0"/></div>
 <div><div class="small">Tax %</div><input data-testid="budget-tax" id="bTax" min="0" step="0.01" type="number" value="0"/></div>
 <div><div class="small">Forecast</div><input data-testid="budget-forecast" id="bForecast" min="0" step="0.01" type="number" value="0"/></div>
 <div><div class="small">Actual</div><input data-testid="budget-actual" id="bActual" min="0" step="0.01" type="number" value="0"/></div>
+<div><div class="small">Vendor confirmation</div><label class="checkbox"><input id="bVendorConfirmed" type="checkbox"/> Vendor will deliver</label></div>
+<div><div class="small">Payment status</div><select id="bPaymentStatus"><option value="unpaid">Unpaid</option><option value="paid">Paid</option></select></div>
+<div style="grid-column:1 / span 2;"><div class="small">Payment proof (PDF)</div><label class="ghost file-trigger" for="bProof"><svg class="icon"><use href="#ic-upload"></use></svg> <span id="bProofLabel">Upload proof</span></label><input accept="application/pdf" class="sr-only" id="bProof" type="file"/><div class="small muted" id="bProofMeta"></div></div>
 <div style="grid-column:1/-1"><div class="small">Notes</div><textarea data-testid="budget-notes" id="bNotes"></textarea></div>
 </form>
 <div class="row" style="margin-top:10px;">
@@ -1809,24 +1824,27 @@ applyTheme=function(theme){
 };
 
 /* ---------- State & Filters ---------- */
-const state={
-  filters:{ search:"", type:"", status:"", from:"", to:"", eventId:"" },
-  currentRoute:"#/dashboard",
-  currentTab:"dashboard",
-  currentProfileId:null,
-  profileFormOpen:false,
-  zoomPanelOpen:false,
-  globalZoom:1,
-  tabZooms:{},
-  accessibleEventIds:new Set(),
-  addrPick:null,
-  poiAddrPick:null,
-  activeKPI:"upcoming",
-  kpiDetails:{},
-  lastKpiTrigger:null,
-  editingEventId:null,
-  graph:null
-};
+  const state={
+    filters:{ search:"", type:"", status:"", from:"", to:"", eventId:"" },
+    currentRoute:"#/dashboard",
+    currentTab:"dashboard",
+    currentProfileId:null,
+    profileFormOpen:false,
+    zoomPanelOpen:false,
+    globalZoom:1,
+    tabZooms:{},
+    accessibleEventIds:new Set(),
+    addrPick:null,
+    poiAddrPick:null,
+    activeKPI:"upcoming",
+    kpiDetails:{},
+    lastKpiTrigger:null,
+    editingEventId:null,
+    graph:null,
+    vendorServicesDraft:[],
+    budgetProofDraft:null,
+    budgetCatalogContext:null
+  };
 let eventAddrAuto=null;
 let poiAddrAuto=null;
 const GLOBAL_ZOOM_KEY="epp_zoom_global_v1";
@@ -1893,15 +1911,17 @@ function seedDemo(){
     { id:uid("slt"), eventId:ev[0].id, title:"Ceremony", lane:"Ceremony Hall", start:addDays(t,30)+"T15:00", end:addDays(t,30)+"T16:00", notes:"Seats 150" },
     { id:uid("slt"), eventId:ev[2].id, title:"Soundcheck", lane:"Ballroom", start:addDays(t,7)+"T12:00", end:addDays(t,7)+"T13:00", notes:"Band + DJ" }
   ];
+  const cateringSvc = { id:uid("svc"), type:"package", refId:"PKG-AURORA-EVE", name:"Signature Evening", price:45000 };
+  const photoSvc = { id:uid("svc"), type:"addon", refId:"AD-PHOTO-BOOTH", name:"Photo Booth Experience", price:12000 };
   const vendors=[
-    { id:uid("ven"), name:"Luna Catering", company:"Luna SA", role:"Catering", email:"sales@luna.mx", phone:"+52 55 0000 0000", contract:"Sent", payment:"Due", docs:"Insurance,W9", events:[ev[0].id, ev[2].id] },
-    { id:uid("ven"), name:"FotoPro MX", company:"FotoPro", role:"Photography", email:"info@fotopro.mx", phone:"+52 33 1111 2222", contract:"Signed", payment:"Paid", docs:"Contract", events:[ev[0].id] }
+    { id:uid("ven"), name:"Luna Catering", company:"Luna SA", role:"Catering", email:"sales@luna.mx", phone:"+52 55 0000 0000", contract:"Sent", docs:"Insurance,W9", services:[cateringSvc] },
+    { id:uid("ven"), name:"FotoPro MX", company:"FotoPro", role:"Photography", email:"info@fotopro.mx", phone:"+52 33 1111 2222", contract:"Signed", docs:"Contract", services:[photoSvc] }
   ];
-  const budget=[
-    { id:uid("bud"), eventId:ev[0].id, cat:"Venue", item:"Hall Rental", qty:1, unit:25000, tax:16, forecast:29000, actual:0, notes:"Includes chairs" },
-    { id:uid("bud"), eventId:ev[0].id, cat:"Catering", item:"Dinner", qty:120, unit:550, tax:16, forecast:0, actual:0, notes:"3-course" },
-    { id:uid("bud"), eventId:ev[2].id, cat:"Music", item:"DJ Package", qty:1, unit:8000, tax:0, forecast:8000, actual:0, notes:"" }
-  ];
+    const budget=[
+      { id:uid("bud"), eventId:ev[0].id, cat:"Venue", item:"Hall Rental", qty:1, unit:25000, tax:16, forecast:29000, actual:0, notes:"Includes chairs", vendorConfirmed:false, paymentStatus:'unpaid' },
+      { id:uid("bud"), eventId:ev[0].id, cat:"Catering", item:"Dinner", qty:120, unit:550, tax:16, vendorId: vendors[0].id, vendorServiceId: cateringSvc.id, catalogRefId: cateringSvc.refId, catalogType: cateringSvc.type, forecast:0, actual:cateringSvc.price, vendorConfirmed:true, paymentStatus:'paid', notes:"3-course" },
+      { id:uid("bud"), eventId:ev[2].id, cat:"Music", item:"DJ Package", qty:1, unit:8000, tax:0, forecast:8000, actual:0, notes:"", vendorId: vendors[1].id, vendorServiceId: photoSvc.id, catalogRefId: photoSvc.refId, catalogType: photoSvc.type, vendorConfirmed:false, paymentStatus:'unpaid' }
+    ];
   const pois=[
     { id:uid("poi"), label:"Hotel Centro", type:"Hotel", lat:19.434, lon:-99.14, address:"Hotel Centro Histórico, Ciudad de México", eventId:ev[0].id },
     { id:uid("poi"), label:"Parking P1", type:"Parking", lat:19.431, lon:-99.129, address:"Estacionamiento Pino Suárez, Ciudad de México", eventId:ev[0].id }
@@ -2301,35 +2321,33 @@ function buildDataGraph({ scopeIds=new Set(), scopedEvents=[], allowedEvents=[],
   });
 
   const vendorAssignments=[];
-  (store.data.vendors||[]).forEach(vendor=>{
-    const assigned=Array.isArray(vendor.events)?vendor.events.filter(Boolean):[];
-    const visibleIds=allowedSet.size
-      ? assigned.filter(id=>allowedSet.has(id))
-      : (isAdminView ? assigned.slice() : []);
-    if(!visibleIds.length){
-      if(isAdminView && !assigned.length){
-        unlinkedVendors.push(vendor);
-      }
-      if(isAdminView){
-        assigned.forEach(eventId=>{
-          if(!eventsById.has(eventId)){
-            orphans.vendorLinks.push({ vendor, eventId });
-          }
-        });
-      }
+  const vendorsById=new Map((store.data.vendors||[]).filter(Boolean).map(v=>[v.id,v]));
+  (store.data.budget||[]).forEach(line=>{
+    if(!line || !line.eventId || !line.vendorId) return;
+    if(allowedSet.size && !allowedSet.has(line.eventId)) return;
+    if(!eventsById.has(line.eventId)){
+      if(isAdminView) orphans.vendorLinks.push({ vendorId: line.vendorId, eventId: line.eventId });
       return;
     }
-    visibleIds.forEach(eventId=>{
-      if(!eventsById.has(eventId)){
-        if(isAdminView) orphans.vendorLinks.push({ vendor, eventId });
-        return;
-      }
-      const ctx=ensureContext(eventId);
-      if(!ctx) return;
+    const vendor=vendorsById.get(line.vendorId);
+    if(!vendor){
+      if(isAdminView) orphans.vendorLinks.push({ vendorId: line.vendorId, eventId: line.eventId });
+      return;
+    }
+    const ctx=ensureContext(line.eventId);
+    if(!ctx) return;
+    if(!ctx.vendors.includes(vendor)){
       ctx.vendors.push(vendor);
-      vendorAssignments.push({ vendor, event:eventsById.get(eventId)||null });
-    });
+      vendorAssignments.push({ vendor, event:eventsById.get(line.eventId)||null });
+    }
   });
+  const linkedVendorIds=new Set(vendorAssignments.map(entry=>entry.vendor?.id).filter(Boolean));
+  if(isAdminView){
+    (store.data.vendors||[]).forEach(vendor=>{
+      if(!vendor || linkedVendorIds.has(vendor.id)) return;
+      unlinkedVendors.push(vendor);
+    });
+  }
 
   (store.data.pois||[]).forEach(poi=>{
     if(!poi) return;
@@ -2679,9 +2697,9 @@ function fillEventScope(){
   });
 }
 
-function fillEventSelectors(){
-  const evsAll = accessibleEvents().slice().sort((a,b)=>(a.title||"").localeCompare(b.title||""));
-  const selects=["#tEvent","#sEvent","#bEvent"].map(q=>qs(q)).filter(Boolean);
+  function fillEventSelectors(){
+    const evsAll = accessibleEvents().slice().sort((a,b)=>(a.title||"").localeCompare(b.title||""));
+    const selects=["#tEvent","#sEvent","#bEvent"].map(q=>qs(q)).filter(Boolean);
   selects.forEach(sel=>{
     const keep=sel.value;
     sel.innerHTML="";
@@ -2693,18 +2711,7 @@ function fillEventSelectors(){
     });
   });
 
-  const vendorSel=qs("#vEvents");
-  if(vendorSel){
-    const keep=new Set(Array.from(vendorSel.selectedOptions||[]).map(opt=>opt.value));
-    vendorSel.innerHTML="";
-    evsAll.forEach(e=>{
-      const o=document.createElement("option");
-      o.value=e.id;
-      o.textContent=e.title;
-      if(keep.has(e.id)) o.selected=true;
-      vendorSel.appendChild(o);
-    });
-  }
+    renderBudgetVendorOptions(qs('#bVendor')?.value||'');
 
   const poiSel=qs("#pEvent");
   if(poiSel){
@@ -2902,8 +2909,8 @@ function renderDataHealth(){
     return note?.id||"Note";
   });
   const sampleVendorLinks=list=>sampleList(list,link=>{
-    const name=link?.vendor?.name || link?.vendor?.company || "Vendor";
-    const eid=link?.eventId || "missing";
+    const name=link?.vendor?.name || link?.vendor?.company || link?.vendorId || "Vendor";
+    const eid=link?.event?.title || link?.eventId || "missing";
     return `${name} → ${eid}`;
   });
   const sampleVendors=list=>sampleList(list,v=>v?.name||v?.company||"Vendor");
@@ -3015,13 +3022,13 @@ function renderDataHealth(){
     }
   };
   pushIssue(scopedTasks.overdueList,"Overdue tasks",sampleTaskEntries);
-  pushIssue(unlinkedVendors,"Vendors not linked to events",sampleVendors);
+  pushIssue(unlinkedVendors,"Vendors not linked to budget lines",sampleVendors);
   pushIssue(orphans.tasks,"Tasks referencing missing events",sampleTasks);
   pushIssue(orphans.timeline,"Timeline slots referencing missing events",sampleTasks);
   pushIssue(orphans.budget,"Budget lines referencing missing events",sampleBudget);
   pushIssue(orphans.notes,"Notes referencing missing events",sampleNotes);
   pushIssue(orphans.pois,"POIs referencing missing events",samplePois);
-  pushIssue(orphans.vendorLinks,"Vendor links referencing missing events",sampleVendorLinks);
+  pushIssue(orphans.vendorLinks,"Vendor links missing vendor or event",sampleVendorLinks);
 
   if(!issueItems.length){
     const li=document.createElement("li");
@@ -4030,66 +4037,358 @@ qs("#btnSaveTask")?.addEventListener("click",()=>{
 qs("#btnResetTask")?.addEventListener("click", resetTaskForm);
 
 /* ---------- Vendors ---------- */
+const vendorCatalogDefaults={
+  packages:[
+    { id:"PKG-AURORA-EVE", name:"Signature Evening", price:16500 },
+    { id:"PKG-HARBOR-SUNSET", name:"Sunset Celebration", price:15200 },
+    { id:"PKG-GARDEN-GALA", name:"Garden Gala", price:13200 }
+  ],
+  addons:[
+    { id:"AD-LIVE-JAZZ", name:"Live Jazz Trio", price:1200 },
+    { id:"AD-CUSTOM-LIGHTING", name:"Custom Lighting Design", price:950 },
+    { id:"AD-PHOTO-BOOTH", name:"Photo Booth Experience", price:750 }
+  ]
+};
+function getVendorCatalog(){
+  const src=(typeof window!=="undefined" && window.vendorCatalog)?window.vendorCatalog:{};
+  const packages=Array.isArray(src?.packages)?src.packages:vendorCatalogDefaults.packages;
+  const addons=Array.isArray(src?.addons)?src.addons:vendorCatalogDefaults.addons;
+  return { packages, addons };
+}
+function findCatalogItem(type,id){
+  if(!id) return null;
+  const { packages, addons } = getVendorCatalog();
+  const list = type==="package"?packages:type==="addon"?addons:[];
+  return list.find(item=>item.id===id)||null;
+}
+function lookupCatalogMatch(service){
+  if(!service || !service.refId) return null;
+  return findCatalogItem(service.type, service.refId);
+}
+function resolveServicePrice(service){
+  if(!service) return null;
+  if(Number.isFinite(service.price)) return service.price;
+  const match=lookupCatalogMatch(service);
+  return (match && Number.isFinite(match.price)) ? match.price : null;
+}
+function renderVendorCatalogOptions(){
+  const select=qs('#vServiceRef'); if(!select) return;
+  const type=(qs('#vServiceType')?.value||'').toLowerCase();
+  select.innerHTML='<option value="">Select package/add-on</option>';
+  const items = type==='package' ? getVendorCatalog().packages : type==='addon' ? getVendorCatalog().addons : [];
+  items.forEach(item=>{
+    const opt=document.createElement('option');
+    opt.value=item.id;
+    const priceLabel = Number.isFinite(item.price)?` — ${fmtMoney(item.price)}`:'';
+    opt.textContent=`${item.name||item.id} (${item.id})${priceLabel}`;
+    select.appendChild(opt);
+  });
+}
+function syncVendorServiceFieldsFromCatalog(){
+  const type=(qs('#vServiceType')?.value||'').toLowerCase();
+  const refId=(qs('#vServiceRef')?.value||'').trim();
+  const match=findCatalogItem(type, refId);
+  if(!match) return;
+  const nameInput=qs('#vServiceName');
+  if(nameInput && !nameInput.value.trim()) nameInput.value=match.name||refId;
+  const priceInput=qs('#vServicePrice');
+  if(priceInput && (!priceInput.value || priceInput.value==="0")) priceInput.value=match.price ?? "";
+}
+
+function vendorsInScope(){
+  return (store.data.vendors||[])
+    .filter(Boolean)
+    .sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+}
+
+function renderVendorServiceList(){
+  const list=qs('#vendorServicesList'); if(!list) return;
+  const services=Array.isArray(state.vendorServicesDraft)?state.vendorServicesDraft:[];
+  list.innerHTML="";
+  if(!services.length){
+    const empty=document.createElement('li');
+    empty.className='muted small';
+    empty.textContent='No services or quotes added yet.';
+    list.appendChild(empty);
+    return;
+  }
+  services.forEach(s=>{
+    const li=document.createElement('li');
+    const typeLabel = s.type ? s.type.charAt(0).toUpperCase()+s.type.slice(1) : 'Service';
+    const catalogMatch = lookupCatalogMatch(s);
+    const priceValue = resolveServicePrice(s);
+    const priceLabel = Number.isFinite(priceValue)?fmtMoney(priceValue):'—';
+    const refBadge = s.refId ? `<span class="pill pill-compact">${s.refId}</span>` : '';
+    const nameLabel = s.name || catalogMatch?.name || 'Service';
+    li.innerHTML=`<div><strong>${nameLabel}</strong> <span class="small muted">${typeLabel}${catalogMatch && catalogMatch.name && catalogMatch.name!==nameLabel ? ` • ${catalogMatch.name}`:""}</span>${refBadge ? `<div class="small muted">${refBadge}</div>`:""}<div class="small">${priceLabel}</div></div>`;
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.className='ghost';
+    btn.innerHTML='<svg class="icon"><use href="#ic-trash"></use></svg>';
+    btn.title='Remove service';
+    btn.addEventListener('click',()=>removeVendorService(s.id));
+    li.appendChild(btn);
+    list.appendChild(li);
+  });
+}
+
+function addVendorService(){
+  const type=(qs('#vServiceType')?.value||'custom').toLowerCase();
+  const refId=(qs('#vServiceRef')?.value||'').trim();
+  const catalogMatch=findCatalogItem(type, refId);
+  const nameInput=qs('#vServiceName');
+  let name=nameInput?.value.trim()||'';
+  let price=toNumber(qs('#vServicePrice')?.value);
+  if(!name && catalogMatch) name = catalogMatch.name || '';
+  if(!Number.isFinite(price) && catalogMatch) price = toNumber(catalogMatch.price);
+  if(!name){ alert('Add a service name before saving.'); return; }
+  if(!Number.isFinite(price)){
+    alert('Pricing comes from your database. Choose a package/add-on with a price or enter one.');
+    return;
+  }
+  const services=Array.isArray(state.vendorServicesDraft)?state.vendorServicesDraft:[];
+  const entry={ id:uid('svc'), type, name, price };
+  if(refId) entry.refId = refId;
+  services.push(entry);
+  state.vendorServicesDraft=services;
+  qs('#vServiceName').value='';
+  const refSelect=qs('#vServiceRef'); if(refSelect) refSelect.value='';
+  const priceInput=qs('#vServicePrice'); if(priceInput) priceInput.value='';
+  renderVendorServiceList();
+}
+
+function removeVendorService(id){
+  state.vendorServicesDraft=(Array.isArray(state.vendorServicesDraft)?state.vendorServicesDraft:[])
+    .filter(s=>s.id!==id);
+  renderVendorServiceList();
+}
+
 function renderVendors(){
   const tbody=qs("#tblVendors tbody"); if(!tbody) return; tbody.innerHTML="";
   const frag=fragment();
-  const allowedIds=(state.accessibleEventIds instanceof Set)
-    ? state.accessibleEventIds
-    : new Set(accessibleEvents().map(e=>e.id));
-  const profile=getCurrentProfile();
-  const list=store.data.vendors
-    .filter(v=>{
-      const assigned=Array.isArray(v.events)?v.events.filter(Boolean):[];
-      if(!assigned.length) return !profile || profile.role==="admin";
-      if(!allowedIds.size) return profile?.role==="admin";
-      return assigned.some(id=>allowedIds.has(id));
-    })
-    .sort((a,b)=>(a.name||"").localeCompare(b.name||""));
-  const eventsById=state.graph?.eventsById || new Map();
+  const list=vendorsInScope();
   list.forEach(v=>{
     const tr=document.createElement("tr");
-    const visibleEvents=(Array.isArray(v.events)?v.events:[])
-      .filter(id=>!allowedIds.size || allowedIds.has(id));
-    const eventNames=visibleEvents
-      .map(id=>eventsById.get(id)?.title||"")
-      .filter(Boolean);
-    const eventsLabel=eventNames.length?eventNames.join(", "):"—";
-    tr.innerHTML=`<td>${v.name||""}</td><td>${v.company||""}</td><td>${v.role||""}</td><td>${eventsLabel}</td><td>${v.email||""}</td><td>${v.phone||""}</td><td><span class="status">${v.contract||"—"}</span></td><td><span class="status ${v.payment==='Overdue'?'s-overdue':v.payment==='Paid'?'s-completed':''}">${v.payment||"—"}</span></td><td>${v.docs||""}</td><td class="row no-print"><button class="ghost" title="Edit" onclick="editVendor('${v.id}')"><svg class="icon"><use href="#ic-edit"></use></svg></button><button class="danger" title="Delete" onclick="delVendor('${v.id}')"><svg class="icon"><use href="#ic-trash"></use></svg></button></td>`;
+    const services = Array.isArray(v.services)?v.services:[];
+    const serviceLabel = services.length
+      ? services.map(s=>{
+          const priceValue = resolveServicePrice(s);
+          const priceText = Number.isFinite(priceValue)?` (${fmtMoney(priceValue)})`:"";
+          const refText = s.refId ? ` [${s.refId}]` : "";
+          const name = s.name || lookupCatalogMatch(s)?.name || "Service";
+          return `${name}${refText}${priceText}`;
+        }).join("; ")
+      : "—";
+    tr.innerHTML=`<td>${v.name||""}</td><td>${v.company||""}</td><td>${v.role||""}</td><td>${serviceLabel}</td><td>${v.email||""}</td><td>${v.phone||""}</td><td><span class="status">${v.contract||"—"}</span></td><td>${v.docs||""}</td><td class="row no-print"><button class="ghost" title="Edit" onclick="editVendor('${v.id}')"><svg class="icon"><use href="#ic-edit"></use></svg></button><button class="danger" title="Delete" onclick="delVendor('${v.id}')"><svg class="icon"><use href="#ic-trash"></use></svg></button></td>`;
     frag.appendChild(tr);
   });
   tbody.appendChild(frag);
 }
-function resetVendorForm(){
-  ["vId","vName","vCompany","vRole","vEmail","vPhone","vDocs"].forEach(id=>{const el=qs("#"+id); if(el) el.value=""});
-  if(qs("#vContract")) qs("#vContract").value="Draft";
-  if(qs("#vPayment")) qs("#vPayment").value="Due";
-  const vEvents=qs("#vEvents");
-  if(vEvents){ Array.from(vEvents.options).forEach(opt=>opt.selected=false); }
+  function resetVendorForm(){
+    ["vId","vName","vCompany","vRole","vEmail","vPhone","vDocs"].forEach(id=>{const el=qs("#"+id); if(el) el.value=""});
+    if(qs("#vContract")) qs("#vContract").value="Draft";
+    const vServiceRef=qs('#vServiceRef'); if(vServiceRef) vServiceRef.value="";
+  const vServiceName=qs('#vServiceName'); if(vServiceName) vServiceName.value="";
+  const vServicePrice=qs('#vServicePrice'); if(vServicePrice) vServicePrice.value="";
+  state.vendorServicesDraft=[];
+  renderVendorServiceList();
 }
-function editVendor(id){
-  const v=store.data.vendors.find(x=>x.id===id); if(!v) return;
-  qs("#vId").value=v.id; qs("#vName").value=v.name||""; qs("#vCompany").value=v.company||""; qs("#vRole").value=v.role||"";
-  qs("#vEmail").value=v.email||""; qs("#vPhone").value=v.phone||""; qs("#vContract").value=v.contract||"Draft"; qs("#vPayment").value=v.payment||"Due"; qs("#vDocs").value=v.docs||"";
-  const vEvents=qs("#vEvents");
-  if(vEvents){
-    const selected=new Set(Array.isArray(v.events)?v.events:[]);
-    Array.from(vEvents.options).forEach(opt=>{ opt.selected=selected.has(opt.value); });
-  }
+  function editVendor(id){
+    const v=store.data.vendors.find(x=>x.id===id); if(!v) return;
+    qs("#vId").value=v.id; qs("#vName").value=v.name||""; qs("#vCompany").value=v.company||""; qs("#vRole").value=v.role||"";
+    qs("#vEmail").value=v.email||""; qs("#vPhone").value=v.phone||""; qs("#vContract").value=v.contract||"Draft"; qs("#vDocs").value=v.docs||"";
+  state.vendorServicesDraft = Array.isArray(v.services) ? v.services.map(s=>({ ...s })) : [];
+  renderVendorServiceList();
   navigate("#/vendors");
 }
 function delVendor(id){ if(confirm("Delete this vendor?")){ store.remove("vendors",id); renderAll("vendors") } }
 qs("#btnAddVendor")?.addEventListener("click",()=>{ resetVendorForm(); navigate("#/vendors"); qs("#vName")?.focus() });
-qs("#btnSaveVendor")?.addEventListener("click",()=>{
-  const eventSelect=qs("#vEvents");
-  const linked=eventSelect?Array.from(eventSelect.selectedOptions||[]).map(opt=>opt.value).filter(Boolean):[];
-  const v={ id:(qs("#vId")?.value||"").trim()||null, name:qs("#vName")?.value.trim(), company:qs("#vCompany")?.value.trim(), role:qs("#vRole")?.value.trim(), email:qs("#vEmail")?.value.trim(), phone:qs("#vPhone")?.value.trim(), contract:qs("#vContract")?.value, payment:qs("#vPayment")?.value, docs:qs("#vDocs")?.value.trim(), events:linked };
-  if(!v.name){ alert("Vendor name is required"); return }
-  store.upsert("vendors",v); resetVendorForm(); renderAll("vendors");
-});
+  qs("#btnSaveVendor")?.addEventListener("click",()=>{
+    const v={ id:(qs("#vId")?.value||"").trim()||null, name:qs("#vName")?.value.trim(), company:qs("#vCompany")?.value.trim(), role:qs("#vRole")?.value.trim(), email:qs("#vEmail")?.value.trim(), phone:qs("#vPhone")?.value.trim(), contract:qs("#vContract")?.value, docs:qs("#vDocs")?.value.trim(), services:Array.isArray(state.vendorServicesDraft)?state.vendorServicesDraft:[] };
+    if(!v.name){ alert("Vendor name is required"); return }
+    store.upsert("vendors",v); resetVendorForm(); renderAll("vendors");
+  });
 qs("#btnResetVendor")?.addEventListener("click", resetVendorForm);
 qs("#btnPrintVendors")?.addEventListener("click", ()=>window.print());
+qs('#btnAddVendorService')?.addEventListener('click', addVendorService);
+['#vServiceType','#vServiceName','#vServicePrice','#vServiceRef'].forEach(sel=>{
+  const el=qs(sel);
+  el?.addEventListener('keypress',e=>{ if(e.key==='Enter'){ e.preventDefault(); addVendorService(); } });
+});
+qs('#vServiceType')?.addEventListener('change',()=>{ renderVendorCatalogOptions(); syncVendorServiceFieldsFromCatalog(); });
+qs('#vServiceRef')?.addEventListener('change', syncVendorServiceFieldsFromCatalog);
+renderVendorCatalogOptions();
+window.addEventListener('vendorCatalogUpdated',()=>{
+  renderVendorCatalogOptions();
+  renderVendorServiceList();
+  renderBudget();
+});
 
 /* ---------- Budget ---------- */
+async function readFileAsDataUrl(file){
+  if(!(file instanceof File)) return null;
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onerror=()=>reject(new Error('Unable to read file'));
+    reader.onload=()=>resolve(reader.result);
+    reader.readAsDataURL(file);
+  });
+}
+
+function updateBudgetProofPreview(line){
+  const label=qs('#bProofLabel');
+  const meta=qs('#bProofMeta');
+  const draft=state.budgetProofDraft || (line && line.paymentProofData ? { name: line.paymentProofName, data: line.paymentProofData } : null);
+  if(label){ label.textContent = draft?.name || 'Upload proof'; }
+  if(meta){ meta.textContent = draft?.data ? 'PDF attached' : 'Attach payment confirmation as PDF'; }
+}
+
+function clearBudgetProofDraft(){
+  state.budgetProofDraft=null;
+  const proofInput=qs('#bProof');
+  if(proofInput) proofInput.value='';
+  updateBudgetProofPreview();
+}
+
+  function openPaymentProof(id){
+    const line=store.data.budget.find(x=>x.id===id);
+    if(!line?.paymentProofData) return;
+    const link=document.createElement('a');
+    link.href=line.paymentProofData;
+    link.download=line.paymentProofName || 'payment-proof.pdf';
+    link.target='_blank';
+    link.click();
+  }
+
+  function getBudgetCatalogContext(){
+    const ref=(qs('#bCatalogRef')?.value||'').trim();
+    const type=(qs('#bCatalogType')?.value||'').trim().toLowerCase();
+    if(ref) return { refId: ref, type };
+    return state.budgetCatalogContext && state.budgetCatalogContext.refId
+      ? { ...state.budgetCatalogContext }
+      : null;
+  }
+
+  function setBudgetCatalogContext(refId, type){
+    const normalizedRef=(refId||'').trim();
+    const normalizedType=(type||'').trim().toLowerCase();
+    state.budgetCatalogContext = normalizedRef ? { refId: normalizedRef, type: normalizedType } : null;
+    const refInput=qs('#bCatalogRef'); if(refInput) refInput.value = normalizedRef;
+    const typeInput=qs('#bCatalogType'); if(typeInput) typeInput.value = normalizedType;
+  }
+
+  function serviceMatchesCatalog(service, context){
+    if(!context?.refId || !service) return false;
+    const refMatch = (service.refId||'').trim().toLowerCase() === context.refId.trim().toLowerCase();
+    const typeMatch = !context.type || !service.type || service.type.toLowerCase() === context.type;
+    return refMatch && typeMatch;
+  }
+
+  function vendorsForCatalog(context){
+    if(!context?.refId) return [];
+    const ref = context.refId.trim().toLowerCase();
+    return vendorsInScope().filter(v=>Array.isArray(v.services) && v.services.some(s=>{
+      const sRef=(s?.refId||'').trim().toLowerCase();
+      const typeOk = !context.type || !s.type || s.type.toLowerCase() === context.type;
+      return (sRef && sRef===ref && typeOk) || serviceMatchesCatalog(s, context);
+    }));
+  }
+
+  function renderBudgetVendorOptions(selectedId){
+    const vendorAssignSel=qs('#bVendor');
+    if(!vendorAssignSel) return;
+    const context=getBudgetCatalogContext();
+    const recommended = vendorsForCatalog(context);
+    const all=vendorsInScope();
+    const others=all.filter(v=>!recommended.includes(v));
+    const keep=selectedId||vendorAssignSel.value;
+    vendorAssignSel.innerHTML='';
+    const base=document.createElement('option');
+    base.value='';
+    base.textContent = context && recommended.length ? 'Select recommended vendor' : 'Unassigned';
+    vendorAssignSel.appendChild(base);
+    const addOption=(vendor,prefix='')=>{
+      const o=document.createElement('option');
+      o.value=vendor.id;
+      o.textContent=`${prefix}${vendor.name||vendor.company||'Vendor'}`;
+      if(vendor.id===keep) o.selected=true;
+      vendorAssignSel.appendChild(o);
+    };
+    recommended.forEach(v=>addOption(v,'(Recommended) '));
+    others.forEach(v=>addOption(v,''));
+    if(!vendorAssignSel.value && !keep && recommended.length===1){
+      vendorAssignSel.value=recommended[0].id;
+    }
+    fillBudgetServiceSelector(vendorAssignSel.value||'', qs('#bService')?.value||'');
+  }
+
+  function fillBudgetServiceSelector(vendorId, selectedId){
+    const select=qs('#bService');
+    if(!select) return;
+    select.innerHTML='<option value="">No linked service</option>';
+    if(!vendorId){ return; }
+    const vendor=store.data.vendors.find(v=>v.id===vendorId);
+    if(!vendor || !Array.isArray(vendor.services)) return;
+    const context=getBudgetCatalogContext();
+    const matches = context ? vendor.services.filter(s=>serviceMatchesCatalog(s, context)) : [];
+    const list = matches.length ? matches : vendor.services;
+    list.forEach(s=>{
+      const o=document.createElement('option');
+      o.value=s.id;
+      const label = s.name || lookupCatalogMatch(s)?.name || 'Service';
+      const priceValue = resolveServicePrice(s);
+      const priceLabel = Number.isFinite(priceValue) ? ` — ${fmtMoney(priceValue)}` : '';
+      const refLabel = s.refId ? ` • ${s.refId}` : '';
+      o.textContent=`${label}${refLabel}${priceLabel}`;
+      if(s.id===selectedId || (!selectedId && matches.length===1 && matches[0].id===s.id)) o.selected=true;
+      select.appendChild(o);
+    });
+    if(!select.value && matches.length===1){
+      select.value = matches[0].id;
+    }
+    applyVendorPriceToActual();
+  }
+
+function applyVendorPriceToActual(){
+  const vendorId=qs('#bVendor')?.value||'';
+  const serviceId=qs('#bService')?.value||'';
+  const qty=toNumber(qs('#bQty')?.value)||1;
+  if(!vendorId || !serviceId) return;
+  const vendor=store.data.vendors.find(v=>v.id===vendorId);
+  const service=vendor && Array.isArray(vendor.services) ? vendor.services.find(s=>s.id===serviceId) : null;
+  const price = resolveServicePrice(service);
+  if(!Number.isFinite(price)) return;
+  const unit=qs('#bUnit');
+  if(unit && (!unit.value || unit.value==='0')){ unit.value = price; }
+  const actual=qs('#bActual');
+  if(actual){ actual.value = (price * qty) || price; }
+}
+
+qs('#bVendor')?.addEventListener('change',()=>{
+  const vendorId=qs('#bVendor')?.value||'';
+  fillBudgetServiceSelector(vendorId,'');
+  applyVendorPriceToActual();
+});
+qs('#bService')?.addEventListener('change', applyVendorPriceToActual);
+qs('#bQty')?.addEventListener('input', applyVendorPriceToActual);
+qs('#bProof')?.addEventListener('change', async (e)=>{
+  const file=e.target.files?.[0];
+  if(!file){ clearBudgetProofDraft(); return; }
+  if(file.type !== 'application/pdf'){
+    alert('Please upload a PDF for payment proof.');
+    clearBudgetProofDraft();
+    return;
+  }
+  try{
+    const data=await readFileAsDataUrl(file);
+    state.budgetProofDraft={ name:file.name, data };
+    updateBudgetProofPreview();
+  }catch(err){
+    alert('Could not read the PDF. Try again.');
+    clearBudgetProofDraft();
+  }
+});
+
 function renderBudget(){
   const tbody=qs("#tblBudget tbody"); if(!tbody) return; tbody.innerHTML="";
   let sumF=0,sumA=0;
@@ -4097,6 +4396,7 @@ function renderBudget(){
   const rows=store.data.budget.filter(b=>!b.eventId || fIds.has(b.eventId));
   const frag=fragment();
   const eventsById=state.graph?.eventsById || new Map();
+  const vendorsById=new Map(store.data.vendors.map(v=>[v.id,v]));
   rows.forEach(b=>{
     const ev=eventsById.get(b.eventId);
     const forecast = b.forecast || (toNumber(b.qty)*toNumber(b.unit)*(1+toNumber(b.tax)/100));
@@ -4110,7 +4410,22 @@ function renderBudget(){
     const toggleIcon = b.confirmed ? '#ic-refresh' : '#ic-check';
     const toggleClass = b.confirmed ? 'ghost' : 'success';
     const toggleBtn = `<button class="${toggleClass}" title="${toggleText}" onclick="toggleLineConfirmation('${b.id}')"><svg class="icon"><use href="${toggleIcon}"></use></svg> ${toggleText}</button>`;
-    tr.innerHTML=`<td>${ev?ev.title:"—"}</td><td>${b.cat||""}</td><td>${b.item||""}</td><td>${b.qty??1}</td><td>${fmtMoney(b.unit||0)}</td><td>${toNumber(b.tax||0).toFixed(2)}</td><td>${fmtMoney(forecast)}</td><td>${fmtMoney(actual)}</td><td>${fmtMoney(variance)}</td><td class="budget-confirmation ${confirmationClass}">${confirmationLabel}</td><td class="row no-print">${toggleBtn}<button class="ghost" title="Edit" onclick="editLine('${b.id}')"><svg class="icon"><use href="#ic-edit"></use></svg></button><button class="danger" title="Delete" onclick="delLine('${b.id}')"><svg class="icon"><use href="#ic-trash"></use></svg></button></td>`;
+    const vendor= vendorsById.get(b.vendorId);
+    const service = vendor && Array.isArray(vendor.services)
+      ? vendor.services.find(s=>s.id===b.vendorServiceId)
+      : null;
+    const vendorLabel = vendor ? (vendor.name || vendor.company || vendor.id) : '—';
+    const serviceName = service ? (service.name || lookupCatalogMatch(service)?.name || '') : '';
+    const serviceRef = service?.refId ? ` • ${service.refId}` : '';
+    const vendorCell = serviceName ? `${vendorLabel}<div class="small muted">${serviceName}${serviceRef}</div>` : vendorLabel;
+    const vendorConfirmClass = b.vendorConfirmed ? 's-completed' : 's-warning';
+    const vendorConfirmText = b.vendorConfirmed ? 'Vendor confirmed' : 'Awaiting vendor';
+    const vendorConfirmBtn = `<button class="${b.vendorConfirmed?'ghost':'success'}" title="${b.vendorConfirmed?'Mark unconfirmed':'Vendor will deliver'}" onclick="toggleVendorCommitment('${b.id}')"><svg class="icon"><use href="${b.vendorConfirmed?'#ic-refresh':'#ic-check'}"></use></svg></button>`;
+    const paymentStatus = (b.paymentStatus||'unpaid') === 'paid' ? 'Paid' : 'Unpaid';
+    const paymentClass = paymentStatus==='Paid' ? 's-completed' : 's-warning';
+    const paymentBtn = `<button class="${paymentStatus==='Paid'?'ghost':'success'}" title="${paymentStatus==='Paid'?'Mark unpaid':'Mark paid'}" onclick="togglePaymentStatus('${b.id}')"><svg class="icon"><use href="${paymentStatus==='Paid'?'#ic-refresh':'#ic-check'}"></use></svg></button>`;
+    const proofCell = b.paymentProofData ? `<button class="ghost" onclick="openPaymentProof('${b.id}')"><svg class="icon"><use href="#ic-download"></use></svg> View</button>` : '<span class="small muted">None</span>';
+    tr.innerHTML=`<td>${ev?ev.title:"—"}</td><td>${b.cat||""}</td><td>${b.item||""}</td><td>${vendorCell}</td><td>${b.qty??1}</td><td>${fmtMoney(b.unit||0)}</td><td>${toNumber(b.tax||0).toFixed(2)}</td><td>${fmtMoney(forecast)}</td><td>${fmtMoney(actual)}</td><td>${fmtMoney(variance)}</td><td><span class="status ${vendorConfirmClass}">${vendorConfirmText}</span> ${vendorConfirmBtn}</td><td><span class="status ${paymentClass}">${paymentStatus}</span> ${paymentBtn}</td><td>${proofCell}</td><td class="budget-confirmation ${confirmationClass}">${confirmationLabel}</td><td class="row no-print">${toggleBtn}<button class="ghost" title="Edit" onclick="editLine('${b.id}')"><svg class="icon"><use href="#ic-edit"></use></svg></button><button class="danger" title="Delete" onclick="delLine('${b.id}')"><svg class="icon"><use href="#ic-trash"></use></svg></button></td>`;
     frag.appendChild(tr);
   });
   tbody.appendChild(frag);
@@ -4118,14 +4433,35 @@ function renderBudget(){
   qs("#sumActual").textContent=fmtMoney(sumA);
   qs("#sumVariance").textContent=fmtMoney(sumA-sumF);
 }
-function resetLineForm(){ ["bId","bCat","bItem","bNotes"].forEach(id=>{const el=qs("#"+id); if(el) el.value=""}); ["bQty","bUnit","bTax","bForecast","bActual"].forEach(id=>{const el=qs("#"+id); if(el) el.value="0"}); fillEventSelectors() }
-function editLine(id){
-  const b=store.data.budget.find(x=>x.id===id); if(!b) return;
-  qs("#bId").value=b.id; qs("#bEvent").value=b.eventId||""; qs("#bCat").value=b.cat||""; qs("#bItem").value=b.item||"";
-  qs("#bQty").value=b.qty??1; qs("#bUnit").value=b.unit??0; qs("#bTax").value=b.tax??0; qs("#bForecast").value=b.forecast??0; qs("#bActual").value=b.actual??0; qs("#bNotes").value=b.notes||"";
+  function resetLineForm(){ ["bId","bCat","bItem","bNotes"].forEach(id=>{const el=qs("#"+id); if(el) el.value=""}); ["bQty","bUnit","bTax","bForecast","bActual"].forEach(id=>{const el=qs("#"+id); if(el) el.value="0"}); const bVendor=qs('#bVendor'); if(bVendor) bVendor.value=""; setBudgetCatalogContext('', ''); fillEventSelectors(); const bService=qs('#bService'); if(bService) bService.value=""; const vendorConfirm=qs('#bVendorConfirmed'); if(vendorConfirm) vendorConfirm.checked=false; const paymentSel=qs('#bPaymentStatus'); if(paymentSel) paymentSel.value='unpaid'; clearBudgetProofDraft(); }
+  function editLine(id){
+    const b=store.data.budget.find(x=>x.id===id); if(!b) return;
+    qs("#bId").value=b.id; qs("#bEvent").value=b.eventId||""; qs("#bCat").value=b.cat||""; qs("#bItem").value=b.item||"";
+    setBudgetCatalogContext(b.catalogRefId||'', b.catalogType||'');
+    renderBudgetVendorOptions(b.vendorId||"");
+    fillBudgetServiceSelector(b.vendorId||"", b.vendorServiceId||"");
+    qs("#bQty").value=b.qty??1; qs("#bUnit").value=b.unit??0; qs("#bTax").value=b.tax??0; qs("#bForecast").value=b.forecast??0; qs("#bActual").value=b.actual??0; qs("#bNotes").value=b.notes||"";
+    const vendorConfirm=qs('#bVendorConfirmed'); if(vendorConfirm) vendorConfirm.checked = Boolean(b.vendorConfirmed);
+    const paymentSel=qs('#bPaymentStatus'); if(paymentSel) paymentSel.value = b.paymentStatus || 'unpaid';
+  state.budgetProofDraft = b.paymentProofData ? { name: b.paymentProofName, data: b.paymentProofData } : null;
+  updateBudgetProofPreview(b);
   navigate("#/budget");
 }
 function delLine(id){ if(confirm("Delete this budget line?")){ store.remove("budget",id); renderAll("budget") } }
+function toggleVendorCommitment(id){
+  const line = store.data.budget.find(x=>x.id===id);
+  if(!line) return;
+  line.vendorConfirmed = !line.vendorConfirmed;
+  store.save();
+  renderAll('budget');
+}
+function togglePaymentStatus(id){
+  const line = store.data.budget.find(x=>x.id===id);
+  if(!line) return;
+  line.paymentStatus = line.paymentStatus === 'paid' ? 'unpaid' : 'paid';
+  store.save();
+  renderAll('budget');
+}
 function toggleLineConfirmation(id){
   const line = store.data.budget.find(x=>x.id===id);
   if(!line) return;
@@ -4165,30 +4501,48 @@ function toggleLineConfirmation(id){
   renderAll('budget');
 }
 qs("#btnAddLine")?.addEventListener("click",()=>{ resetLineForm(); navigate("#/budget"); qs("#bCat")?.focus() });
-qs("#btnSaveLine")?.addEventListener("click",()=>{
-  const b={ id:(qs("#bId")?.value||"").trim()||null, eventId:qs("#bEvent")?.value||"", cat:qs("#bCat")?.value.trim(), item:qs("#bItem")?.value.trim(), qty:toNumber(qs("#bQty")?.value), unit:toNumber(qs("#bUnit")?.value), tax:toNumber(qs("#bTax")?.value), forecast:toNumber(qs("#bForecast")?.value), actual:toNumber(qs("#bActual")?.value), notes:qs("#bNotes")?.value.trim() };
+  qs("#btnSaveLine")?.addEventListener("click",()=>{
+    const b={ id:(qs("#bId")?.value||"").trim()||null, eventId:qs("#bEvent")?.value||"", cat:qs("#bCat")?.value.trim(), item:qs("#bItem")?.value.trim(), vendorId:qs("#bVendor")?.value||"", vendorServiceId:qs("#bService")?.value||"", qty:toNumber(qs("#bQty")?.value), unit:toNumber(qs("#bUnit")?.value), tax:toNumber(qs("#bTax")?.value), forecast:toNumber(qs("#bForecast")?.value), actual:toNumber(qs("#bActual")?.value), vendorConfirmed:Boolean(qs('#bVendorConfirmed')?.checked), paymentStatus:(qs('#bPaymentStatus')?.value||'unpaid'), paymentProofName:state.budgetProofDraft?.name||"", paymentProofData:state.budgetProofDraft?.data||"", catalogRefId:(qs('#bCatalogRef')?.value||'').trim(), catalogType:(qs('#bCatalogType')?.value||'').trim(), notes:qs("#bNotes")?.value.trim() };
   if(b.id){
     const existing=store.data.budget.find(x=>x.id===b.id);
-    if(existing){
-      b.confirmed = existing.confirmed === true;
-      if(existing.quoteKey) b.quoteKey = existing.quoteKey;
-      if(existing.quoteLineKey) b.quoteLineKey = existing.quoteLineKey;
+      if(existing){
+        b.confirmed = existing.confirmed === true;
+        if(existing.quoteKey) b.quoteKey = existing.quoteKey;
+        if(existing.quoteLineKey) b.quoteLineKey = existing.quoteLineKey;
+        if(!state.budgetProofDraft && existing.paymentProofData){
+          b.paymentProofName = existing.paymentProofName;
+          b.paymentProofData = existing.paymentProofData;
+        }
+        if(!b.catalogRefId && existing.catalogRefId){
+          b.catalogRefId = existing.catalogRefId;
+        }
+        if(!b.catalogType && existing.catalogType){
+          b.catalogType = existing.catalogType;
+        }
+      }
     }
-  }
   if(!b.cat || !b.item){ alert("Category and Item are required"); return }
   store.upsert("budget",b); resetLineForm(); renderAll("budget");
 });
 qs("#btnResetLine")?.addEventListener("click", resetLineForm);
 qs("#btnExportCSV")?.addEventListener("click",()=>{
-  const headers=["Event","Category","Item","Qty","Unit","Tax%","Forecast","Actual","Variance","Confirmation","Notes"];
+  const headers=["Event","Category","Item","Vendor","Service","Qty","Unit","Tax%","Forecast","Actual","Variance","Vendor Status","Payment","Proof","Confirmation","Notes"];
   let csv=headers.join(",")+"\n";
   const eventsById=state.graph?.eventsById || new Map();
+  const vendorsById=new Map(store.data.vendors.map(v=>[v.id,v]));
   store.data.budget.forEach(b=>{
     const ev=eventsById.get(b.eventId);
+    const vendor = vendorsById.get(b.vendorId);
+    const vendorName = vendor ? (vendor.name || vendor.company || vendor.id) : "";
+    const serviceEntry = vendor && Array.isArray(vendor.services)
+      ? vendor.services.find(s=>s.id===b.vendorServiceId)
+      : null;
+    const serviceName = serviceEntry ? (serviceEntry.name || lookupCatalogMatch(serviceEntry)?.name || "") : "";
+    const serviceRef = serviceEntry?.refId ? ` [${serviceEntry.refId}]` : "";
     const forecast=b.forecast || (toNumber(b.qty)*toNumber(b.unit)*(1+toNumber(b.tax)/100));
     const actual=toNumber(b.actual);
     const variance=actual-forecast;
-    const row=[(ev?ev.title:""), b.cat||"", b.item||"", b.qty??1, b.unit??0, b.tax??0, forecast, actual, variance, (b.confirmed?"Confirmed":"Pending"), (b.notes||"").replace(/,/g,";")];
+    const row=[(ev?ev.title:""), b.cat||"", b.item||"", vendorName, `${serviceName}${serviceRef}`, b.qty??1, b.unit??0, b.tax??0, forecast, actual, variance, (b.vendorConfirmed?"Vendor confirmed":"Awaiting vendor"), (b.paymentStatus==='paid'?'Paid':'Unpaid'), (b.paymentProofData?'Yes':'No'), (b.confirmed?"Confirmed":"Pending"), (b.notes||"").replace(/,/g,";")];
     csv+=row.join(",")+"\n";
   });
   const blob=new Blob([csv],{type:"text/csv"});
