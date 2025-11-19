@@ -977,7 +977,7 @@ Perf notes:
 <div aria-label="Vendor sheet" class="table-wrap" role="region">
 <table id="tblVendors">
 <thead><tr>
-<th scope="col">Name</th><th scope="col">Company</th><th scope="col">Role</th><th scope="col">Events</th><th scope="col">Email</th><th scope="col">Phone</th><th scope="col">Contract</th><th scope="col">Payment</th><th scope="col">Docs</th><th class="no-print" scope="col">Actions</th>
+<th scope="col">Name</th><th scope="col">Company</th><th scope="col">Role</th><th scope="col">Events</th><th scope="col">Services</th><th scope="col">Email</th><th scope="col">Phone</th><th scope="col">Contract</th><th scope="col">Payment</th><th scope="col">Docs</th><th class="no-print" scope="col">Actions</th>
 </tr></thead><tbody></tbody>
 </table>
 </div>
@@ -998,6 +998,18 @@ Perf notes:
 <select aria-describedby="vendorEventsHint" class="multi-select" data-testid="vendor-events" id="vEvents" multiple=""></select>
 <div class="small muted" id="vendorEventsHint">Hold Ctrl/⌘ to select multiple events.</div>
 </div>
+<div style="grid-column:1 / -1;">
+<div class="small">Services &amp; quotes</div>
+<div class="grid grid-4 gap-tight">
+  <div><div class="small">Type</div><select id="vServiceType"><option value="package">Package</option><option value="addon">Add-on</option><option value="custom" selected="">Custom</option></select></div>
+  <div><div class="small">Database ID</div><select id="vServiceRef"><option value="">Select package/add-on</option></select></div>
+  <div><div class="small">Service name</div><input id="vServiceName" placeholder="e.g., Dinner package"/></div>
+  <div><div class="small">Price</div><input id="vServicePrice" min="0" step="0.01" type="number"/></div>
+</div>
+<div class="small muted" id="vendorServiceHint">Package/Add-on options load from your database; name/price auto-fill when you pick an ID.</div>
+<div class="row" style="margin-top:6px"><button class="ghost" id="btnAddVendorService" type="button"><svg class="icon"><use href="#ic-plus"></use></svg> Add service</button></div>
+<ul class="pill-list" id="vendorServicesList" style="margin-top:6px"></ul>
+</div>
 </form>
 <div class="row" style="margin-top:10px;">
 <button class="success" data-testid="save-vendor" id="btnSaveVendor"><svg class="icon"><use href="#ic-save"></use></svg> Save</button>
@@ -1013,10 +1025,10 @@ Perf notes:
 <div aria-label="Budget lines" class="table-wrap" role="region">
 <table id="tblBudget">
 <thead><tr>
-<th scope="col">Event</th><th scope="col">Category</th><th scope="col">Item</th><th scope="col">Qty</th><th scope="col">Unit Cost</th><th scope="col">Tax %</th><th scope="col">Forecast</th><th scope="col">Actual</th><th scope="col">Variance</th><th scope="col">Confirmation</th><th class="no-print" scope="col">Actions</th>
+<th scope="col">Event</th><th scope="col">Category</th><th scope="col">Item</th><th scope="col">Vendor</th><th scope="col">Qty</th><th scope="col">Unit Cost</th><th scope="col">Tax %</th><th scope="col">Forecast</th><th scope="col">Actual</th><th scope="col">Variance</th><th scope="col">Confirmation</th><th class="no-print" scope="col">Actions</th>
 </tr></thead><tbody></tbody>
 <tfoot><tr>
-<th colspan="6" scope="row">Totals</th>
+<th colspan="7" scope="row">Totals</th>
 <th aria-live="polite" id="sumForecast">0.00</th>
 <th aria-live="polite" id="sumActual">0.00</th>
 <th aria-live="polite" id="sumVariance">0.00</th>
@@ -1027,11 +1039,13 @@ Perf notes:
 </div>
 <div class="hr"></div>
 <h3>Budget Line Form</h3>
-<form class="grid grid-5 gap-tight" onsubmit="return false;">
+<form class="grid grid-6 gap-tight" onsubmit="return false;">
 <input data-testid="budget-id" id="bId" type="hidden"/>
 <div><div class="small">Event*</div><select data-testid="budget-event" id="bEvent" required=""></select></div>
 <div><div class="small">Category*</div><input data-testid="budget-cat" id="bCat" placeholder="e.g., Venue" required=""/></div>
 <div><div class="small">Item*</div><input data-testid="budget-item" id="bItem" placeholder="e.g., Ballroom" required=""/></div>
+<div><div class="small">Vendor</div><select data-testid="budget-vendor" id="bVendor"></select></div>
+<div><div class="small">Service</div><select id="bService"></select></div>
 <div><div class="small">Qty</div><input data-testid="budget-qty" id="bQty" min="0" step="1" type="number" value="1"/></div>
 <div><div class="small">Unit Cost</div><input data-testid="budget-unit" id="bUnit" min="0" step="0.01" type="number" value="0"/></div>
 <div><div class="small">Tax %</div><input data-testid="budget-tax" id="bTax" min="0" step="0.01" type="number" value="0"/></div>
@@ -1825,7 +1839,8 @@ const state={
   kpiDetails:{},
   lastKpiTrigger:null,
   editingEventId:null,
-  graph:null
+  graph:null,
+  vendorServicesDraft:[]
 };
 let eventAddrAuto=null;
 let poiAddrAuto=null;
@@ -1893,14 +1908,16 @@ function seedDemo(){
     { id:uid("slt"), eventId:ev[0].id, title:"Ceremony", lane:"Ceremony Hall", start:addDays(t,30)+"T15:00", end:addDays(t,30)+"T16:00", notes:"Seats 150" },
     { id:uid("slt"), eventId:ev[2].id, title:"Soundcheck", lane:"Ballroom", start:addDays(t,7)+"T12:00", end:addDays(t,7)+"T13:00", notes:"Band + DJ" }
   ];
+  const cateringSvc = { id:uid("svc"), type:"package", refId:"PKG-AURORA-EVE", name:"Signature Evening", price:45000 };
+  const photoSvc = { id:uid("svc"), type:"addon", refId:"AD-PHOTO-BOOTH", name:"Photo Booth Experience", price:12000 };
   const vendors=[
-    { id:uid("ven"), name:"Luna Catering", company:"Luna SA", role:"Catering", email:"sales@luna.mx", phone:"+52 55 0000 0000", contract:"Sent", payment:"Due", docs:"Insurance,W9", events:[ev[0].id, ev[2].id] },
-    { id:uid("ven"), name:"FotoPro MX", company:"FotoPro", role:"Photography", email:"info@fotopro.mx", phone:"+52 33 1111 2222", contract:"Signed", payment:"Paid", docs:"Contract", events:[ev[0].id] }
+    { id:uid("ven"), name:"Luna Catering", company:"Luna SA", role:"Catering", email:"sales@luna.mx", phone:"+52 55 0000 0000", contract:"Sent", payment:"Due", docs:"Insurance,W9", events:[ev[0].id, ev[2].id], services:[cateringSvc] },
+    { id:uid("ven"), name:"FotoPro MX", company:"FotoPro", role:"Photography", email:"info@fotopro.mx", phone:"+52 33 1111 2222", contract:"Signed", payment:"Paid", docs:"Contract", events:[ev[0].id], services:[photoSvc] }
   ];
   const budget=[
     { id:uid("bud"), eventId:ev[0].id, cat:"Venue", item:"Hall Rental", qty:1, unit:25000, tax:16, forecast:29000, actual:0, notes:"Includes chairs" },
-    { id:uid("bud"), eventId:ev[0].id, cat:"Catering", item:"Dinner", qty:120, unit:550, tax:16, forecast:0, actual:0, notes:"3-course" },
-    { id:uid("bud"), eventId:ev[2].id, cat:"Music", item:"DJ Package", qty:1, unit:8000, tax:0, forecast:8000, actual:0, notes:"" }
+    { id:uid("bud"), eventId:ev[0].id, cat:"Catering", item:"Dinner", qty:120, unit:550, tax:16, vendorId: vendors[0].id, vendorServiceId: cateringSvc.id, forecast:0, actual:cateringSvc.price, notes:"3-course" },
+    { id:uid("bud"), eventId:ev[2].id, cat:"Music", item:"DJ Package", qty:1, unit:8000, tax:0, forecast:8000, actual:0, notes:"", vendorId: vendors[1].id, vendorServiceId: photoSvc.id }
   ];
   const pois=[
     { id:uid("poi"), label:"Hotel Centro", type:"Hotel", lat:19.434, lon:-99.14, address:"Hotel Centro Histórico, Ciudad de México", eventId:ev[0].id },
@@ -2705,6 +2722,21 @@ function fillEventSelectors(){
       vendorSel.appendChild(o);
     });
   }
+
+  const vendorAssignSel=qs('#bVendor');
+  if(vendorAssignSel){
+    const keep=vendorAssignSel.value;
+    vendorAssignSel.innerHTML='<option value="">Unassigned</option>';
+    vendorsInScope().forEach(v=>{
+      const o=document.createElement('option');
+      o.value=v.id;
+      o.textContent=v.name||v.company||'Vendor';
+      if(v.id===keep) o.selected=true;
+      vendorAssignSel.appendChild(o);
+    });
+  }
+
+  fillBudgetServiceSelector(qs('#bVendor')?.value||'', qs('#bService')?.value||'');
 
   const poiSel=qs("#pEvent");
   if(poiSel){
@@ -4030,14 +4062,70 @@ qs("#btnSaveTask")?.addEventListener("click",()=>{
 qs("#btnResetTask")?.addEventListener("click", resetTaskForm);
 
 /* ---------- Vendors ---------- */
-function renderVendors(){
-  const tbody=qs("#tblVendors tbody"); if(!tbody) return; tbody.innerHTML="";
-  const frag=fragment();
+const vendorCatalogDefaults={
+  packages:[
+    { id:"PKG-AURORA-EVE", name:"Signature Evening", price:16500 },
+    { id:"PKG-HARBOR-SUNSET", name:"Sunset Celebration", price:15200 },
+    { id:"PKG-GARDEN-GALA", name:"Garden Gala", price:13200 }
+  ],
+  addons:[
+    { id:"AD-LIVE-JAZZ", name:"Live Jazz Trio", price:1200 },
+    { id:"AD-CUSTOM-LIGHTING", name:"Custom Lighting Design", price:950 },
+    { id:"AD-PHOTO-BOOTH", name:"Photo Booth Experience", price:750 }
+  ]
+};
+function getVendorCatalog(){
+  const src=(typeof window!=="undefined" && window.vendorCatalog)?window.vendorCatalog:{};
+  const packages=Array.isArray(src?.packages)?src.packages:vendorCatalogDefaults.packages;
+  const addons=Array.isArray(src?.addons)?src.addons:vendorCatalogDefaults.addons;
+  return { packages, addons };
+}
+function findCatalogItem(type,id){
+  if(!id) return null;
+  const { packages, addons } = getVendorCatalog();
+  const list = type==="package"?packages:type==="addon"?addons:[];
+  return list.find(item=>item.id===id)||null;
+}
+function lookupCatalogMatch(service){
+  if(!service || !service.refId) return null;
+  return findCatalogItem(service.type, service.refId);
+}
+function resolveServicePrice(service){
+  if(!service) return null;
+  if(Number.isFinite(service.price)) return service.price;
+  const match=lookupCatalogMatch(service);
+  return (match && Number.isFinite(match.price)) ? match.price : null;
+}
+function renderVendorCatalogOptions(){
+  const select=qs('#vServiceRef'); if(!select) return;
+  const type=(qs('#vServiceType')?.value||'').toLowerCase();
+  select.innerHTML='<option value="">Select package/add-on</option>';
+  const items = type==='package' ? getVendorCatalog().packages : type==='addon' ? getVendorCatalog().addons : [];
+  items.forEach(item=>{
+    const opt=document.createElement('option');
+    opt.value=item.id;
+    const priceLabel = Number.isFinite(item.price)?` — ${fmtMoney(item.price)}`:'';
+    opt.textContent=`${item.name||item.id} (${item.id})${priceLabel}`;
+    select.appendChild(opt);
+  });
+}
+function syncVendorServiceFieldsFromCatalog(){
+  const type=(qs('#vServiceType')?.value||'').toLowerCase();
+  const refId=(qs('#vServiceRef')?.value||'').trim();
+  const match=findCatalogItem(type, refId);
+  if(!match) return;
+  const nameInput=qs('#vServiceName');
+  if(nameInput && !nameInput.value.trim()) nameInput.value=match.name||refId;
+  const priceInput=qs('#vServicePrice');
+  if(priceInput && (!priceInput.value || priceInput.value==="0")) priceInput.value=match.price ?? "";
+}
+
+function vendorsInScope(){
   const allowedIds=(state.accessibleEventIds instanceof Set)
     ? state.accessibleEventIds
     : new Set(accessibleEvents().map(e=>e.id));
   const profile=getCurrentProfile();
-  const list=store.data.vendors
+  return store.data.vendors
     .filter(v=>{
       const assigned=Array.isArray(v.events)?v.events.filter(Boolean):[];
       if(!assigned.length) return !profile || profile.role==="admin";
@@ -4045,6 +4133,73 @@ function renderVendors(){
       return assigned.some(id=>allowedIds.has(id));
     })
     .sort((a,b)=>(a.name||"").localeCompare(b.name||""));
+}
+
+function renderVendorServiceList(){
+  const list=qs('#vendorServicesList'); if(!list) return;
+  const services=Array.isArray(state.vendorServicesDraft)?state.vendorServicesDraft:[];
+  list.innerHTML="";
+  if(!services.length){
+    const empty=document.createElement('li');
+    empty.className='muted small';
+    empty.textContent='No services or quotes added yet.';
+    list.appendChild(empty);
+    return;
+  }
+  services.forEach(s=>{
+    const li=document.createElement('li');
+    const typeLabel = s.type ? s.type.charAt(0).toUpperCase()+s.type.slice(1) : 'Service';
+    const catalogMatch = lookupCatalogMatch(s);
+    const priceValue = resolveServicePrice(s);
+    const priceLabel = Number.isFinite(priceValue)?fmtMoney(priceValue):'—';
+    const refBadge = s.refId ? `<span class="pill pill-compact">${s.refId}</span>` : '';
+    const nameLabel = s.name || catalogMatch?.name || 'Service';
+    li.innerHTML=`<div><strong>${nameLabel}</strong> <span class="small muted">${typeLabel}${catalogMatch && catalogMatch.name && catalogMatch.name!==nameLabel ? ` • ${catalogMatch.name}`:""}</span>${refBadge ? `<div class="small muted">${refBadge}</div>`:""}<div class="small">${priceLabel}</div></div>`;
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.className='ghost';
+    btn.innerHTML='<svg class="icon"><use href="#ic-trash"></use></svg>';
+    btn.title='Remove service';
+    btn.addEventListener('click',()=>removeVendorService(s.id));
+    li.appendChild(btn);
+    list.appendChild(li);
+  });
+}
+
+function addVendorService(){
+  const type=(qs('#vServiceType')?.value||'custom').toLowerCase();
+  const refId=(qs('#vServiceRef')?.value||'').trim();
+  const catalogMatch=findCatalogItem(type, refId);
+  const nameInput=qs('#vServiceName');
+  let name=nameInput?.value.trim()||'';
+  let price=toNumber(qs('#vServicePrice')?.value);
+  if(!name && catalogMatch) name = catalogMatch.name || '';
+  if(!Number.isFinite(price) && catalogMatch) price = toNumber(catalogMatch.price);
+  if(!name){ alert('Add a service name before saving.'); return; }
+  const services=Array.isArray(state.vendorServicesDraft)?state.vendorServicesDraft:[];
+  const entry={ id:uid('svc'), type, name, price };
+  if(refId) entry.refId = refId;
+  services.push(entry);
+  state.vendorServicesDraft=services;
+  qs('#vServiceName').value='';
+  const refSelect=qs('#vServiceRef'); if(refSelect) refSelect.value='';
+  const priceInput=qs('#vServicePrice'); if(priceInput) priceInput.value='';
+  renderVendorServiceList();
+}
+
+function removeVendorService(id){
+  state.vendorServicesDraft=(Array.isArray(state.vendorServicesDraft)?state.vendorServicesDraft:[])
+    .filter(s=>s.id!==id);
+  renderVendorServiceList();
+}
+
+function renderVendors(){
+  const tbody=qs("#tblVendors tbody"); if(!tbody) return; tbody.innerHTML="";
+  const frag=fragment();
+  const allowedIds=(state.accessibleEventIds instanceof Set)
+    ? state.accessibleEventIds
+    : new Set(accessibleEvents().map(e=>e.id));
+  const list=vendorsInScope();
   const eventsById=state.graph?.eventsById || new Map();
   list.forEach(v=>{
     const tr=document.createElement("tr");
@@ -4054,7 +4209,17 @@ function renderVendors(){
       .map(id=>eventsById.get(id)?.title||"")
       .filter(Boolean);
     const eventsLabel=eventNames.length?eventNames.join(", "):"—";
-    tr.innerHTML=`<td>${v.name||""}</td><td>${v.company||""}</td><td>${v.role||""}</td><td>${eventsLabel}</td><td>${v.email||""}</td><td>${v.phone||""}</td><td><span class="status">${v.contract||"—"}</span></td><td><span class="status ${v.payment==='Overdue'?'s-overdue':v.payment==='Paid'?'s-completed':''}">${v.payment||"—"}</span></td><td>${v.docs||""}</td><td class="row no-print"><button class="ghost" title="Edit" onclick="editVendor('${v.id}')"><svg class="icon"><use href="#ic-edit"></use></svg></button><button class="danger" title="Delete" onclick="delVendor('${v.id}')"><svg class="icon"><use href="#ic-trash"></use></svg></button></td>`;
+    const services = Array.isArray(v.services)?v.services:[];
+    const serviceLabel = services.length
+      ? services.map(s=>{
+          const priceValue = resolveServicePrice(s);
+          const priceText = Number.isFinite(priceValue)?` (${fmtMoney(priceValue)})`:"";
+          const refText = s.refId ? ` [${s.refId}]` : "";
+          const name = s.name || lookupCatalogMatch(s)?.name || "Service";
+          return `${name}${refText}${priceText}`;
+        }).join("; ")
+      : "—";
+    tr.innerHTML=`<td>${v.name||""}</td><td>${v.company||""}</td><td>${v.role||""}</td><td>${eventsLabel}</td><td>${serviceLabel}</td><td>${v.email||""}</td><td>${v.phone||""}</td><td><span class="status">${v.contract||"—"}</span></td><td><span class="status ${v.payment==='Overdue'?'s-overdue':v.payment==='Paid'?'s-completed':''}">${v.payment||"—"}</span></td><td>${v.docs||""}</td><td class="row no-print"><button class="ghost" title="Edit" onclick="editVendor('${v.id}')"><svg class="icon"><use href="#ic-edit"></use></svg></button><button class="danger" title="Delete" onclick="delVendor('${v.id}')"><svg class="icon"><use href="#ic-trash"></use></svg></button></td>`;
     frag.appendChild(tr);
   });
   tbody.appendChild(frag);
@@ -4063,8 +4228,13 @@ function resetVendorForm(){
   ["vId","vName","vCompany","vRole","vEmail","vPhone","vDocs"].forEach(id=>{const el=qs("#"+id); if(el) el.value=""});
   if(qs("#vContract")) qs("#vContract").value="Draft";
   if(qs("#vPayment")) qs("#vPayment").value="Due";
+  const vServiceRef=qs('#vServiceRef'); if(vServiceRef) vServiceRef.value="";
+  const vServiceName=qs('#vServiceName'); if(vServiceName) vServiceName.value="";
+  const vServicePrice=qs('#vServicePrice'); if(vServicePrice) vServicePrice.value="";
   const vEvents=qs("#vEvents");
   if(vEvents){ Array.from(vEvents.options).forEach(opt=>opt.selected=false); }
+  state.vendorServicesDraft=[];
+  renderVendorServiceList();
 }
 function editVendor(id){
   const v=store.data.vendors.find(x=>x.id===id); if(!v) return;
@@ -4075,6 +4245,8 @@ function editVendor(id){
     const selected=new Set(Array.isArray(v.events)?v.events:[]);
     Array.from(vEvents.options).forEach(opt=>{ opt.selected=selected.has(opt.value); });
   }
+  state.vendorServicesDraft = Array.isArray(v.services) ? v.services.map(s=>({ ...s })) : [];
+  renderVendorServiceList();
   navigate("#/vendors");
 }
 function delVendor(id){ if(confirm("Delete this vendor?")){ store.remove("vendors",id); renderAll("vendors") } }
@@ -4082,14 +4254,61 @@ qs("#btnAddVendor")?.addEventListener("click",()=>{ resetVendorForm(); navigate(
 qs("#btnSaveVendor")?.addEventListener("click",()=>{
   const eventSelect=qs("#vEvents");
   const linked=eventSelect?Array.from(eventSelect.selectedOptions||[]).map(opt=>opt.value).filter(Boolean):[];
-  const v={ id:(qs("#vId")?.value||"").trim()||null, name:qs("#vName")?.value.trim(), company:qs("#vCompany")?.value.trim(), role:qs("#vRole")?.value.trim(), email:qs("#vEmail")?.value.trim(), phone:qs("#vPhone")?.value.trim(), contract:qs("#vContract")?.value, payment:qs("#vPayment")?.value, docs:qs("#vDocs")?.value.trim(), events:linked };
+  const v={ id:(qs("#vId")?.value||"").trim()||null, name:qs("#vName")?.value.trim(), company:qs("#vCompany")?.value.trim(), role:qs("#vRole")?.value.trim(), email:qs("#vEmail")?.value.trim(), phone:qs("#vPhone")?.value.trim(), contract:qs("#vContract")?.value, payment:qs("#vPayment")?.value, docs:qs("#vDocs")?.value.trim(), events:linked, services:Array.isArray(state.vendorServicesDraft)?state.vendorServicesDraft:[] };
   if(!v.name){ alert("Vendor name is required"); return }
   store.upsert("vendors",v); resetVendorForm(); renderAll("vendors");
 });
 qs("#btnResetVendor")?.addEventListener("click", resetVendorForm);
 qs("#btnPrintVendors")?.addEventListener("click", ()=>window.print());
+qs('#btnAddVendorService')?.addEventListener('click', addVendorService);
+['#vServiceType','#vServiceName','#vServicePrice','#vServiceRef'].forEach(sel=>{
+  const el=qs(sel);
+  el?.addEventListener('keypress',e=>{ if(e.key==='Enter'){ e.preventDefault(); addVendorService(); } });
+});
+qs('#vServiceType')?.addEventListener('change',()=>{ renderVendorCatalogOptions(); syncVendorServiceFieldsFromCatalog(); });
+qs('#vServiceRef')?.addEventListener('change', syncVendorServiceFieldsFromCatalog);
+renderVendorCatalogOptions();
 
 /* ---------- Budget ---------- */
+function fillBudgetServiceSelector(vendorId, selectedId){
+  const select=qs('#bService');
+  if(!select) return;
+  select.innerHTML='<option value="">No linked service</option>';
+  if(!vendorId){ return; }
+  const vendor=store.data.vendors.find(v=>v.id===vendorId);
+  if(!vendor || !Array.isArray(vendor.services)) return;
+  vendor.services.forEach(s=>{
+    const o=document.createElement('option');
+    o.value=s.id;
+    const label = s.name || lookupCatalogMatch(s)?.name || 'Service';
+    const refLabel = s.refId ? ` — ${s.refId}` : '';
+    o.textContent=`${label}${refLabel}`;
+    if(s.id===selectedId) o.selected=true;
+    select.appendChild(o);
+  });
+}
+
+function applyVendorPriceToActual(){
+  const vendorId=qs('#bVendor')?.value||'';
+  const serviceId=qs('#bService')?.value||'';
+  const qty=toNumber(qs('#bQty')?.value)||1;
+  if(!vendorId || !serviceId) return;
+  const vendor=store.data.vendors.find(v=>v.id===vendorId);
+  const service=vendor && Array.isArray(vendor.services) ? vendor.services.find(s=>s.id===serviceId) : null;
+  const price = resolveServicePrice(service);
+  if(!Number.isFinite(price)) return;
+  const actual=qs('#bActual');
+  if(actual){ actual.value = (price * qty) || price; }
+}
+
+qs('#bVendor')?.addEventListener('change',()=>{
+  const vendorId=qs('#bVendor')?.value||'';
+  fillBudgetServiceSelector(vendorId,'');
+  applyVendorPriceToActual();
+});
+qs('#bService')?.addEventListener('change', applyVendorPriceToActual);
+qs('#bQty')?.addEventListener('input', applyVendorPriceToActual);
+
 function renderBudget(){
   const tbody=qs("#tblBudget tbody"); if(!tbody) return; tbody.innerHTML="";
   let sumF=0,sumA=0;
@@ -4097,6 +4316,7 @@ function renderBudget(){
   const rows=store.data.budget.filter(b=>!b.eventId || fIds.has(b.eventId));
   const frag=fragment();
   const eventsById=state.graph?.eventsById || new Map();
+  const vendorsById=new Map(store.data.vendors.map(v=>[v.id,v]));
   rows.forEach(b=>{
     const ev=eventsById.get(b.eventId);
     const forecast = b.forecast || (toNumber(b.qty)*toNumber(b.unit)*(1+toNumber(b.tax)/100));
@@ -4110,7 +4330,15 @@ function renderBudget(){
     const toggleIcon = b.confirmed ? '#ic-refresh' : '#ic-check';
     const toggleClass = b.confirmed ? 'ghost' : 'success';
     const toggleBtn = `<button class="${toggleClass}" title="${toggleText}" onclick="toggleLineConfirmation('${b.id}')"><svg class="icon"><use href="${toggleIcon}"></use></svg> ${toggleText}</button>`;
-    tr.innerHTML=`<td>${ev?ev.title:"—"}</td><td>${b.cat||""}</td><td>${b.item||""}</td><td>${b.qty??1}</td><td>${fmtMoney(b.unit||0)}</td><td>${toNumber(b.tax||0).toFixed(2)}</td><td>${fmtMoney(forecast)}</td><td>${fmtMoney(actual)}</td><td>${fmtMoney(variance)}</td><td class="budget-confirmation ${confirmationClass}">${confirmationLabel}</td><td class="row no-print">${toggleBtn}<button class="ghost" title="Edit" onclick="editLine('${b.id}')"><svg class="icon"><use href="#ic-edit"></use></svg></button><button class="danger" title="Delete" onclick="delLine('${b.id}')"><svg class="icon"><use href="#ic-trash"></use></svg></button></td>`;
+    const vendor= vendorsById.get(b.vendorId);
+    const service = vendor && Array.isArray(vendor.services)
+      ? vendor.services.find(s=>s.id===b.vendorServiceId)
+      : null;
+    const vendorLabel = vendor ? (vendor.name || vendor.company || vendor.id) : '—';
+    const serviceName = service ? (service.name || lookupCatalogMatch(service)?.name || '') : '';
+    const serviceRef = service?.refId ? ` • ${service.refId}` : '';
+    const vendorCell = serviceName ? `${vendorLabel}<div class="small muted">${serviceName}${serviceRef}</div>` : vendorLabel;
+    tr.innerHTML=`<td>${ev?ev.title:"—"}</td><td>${b.cat||""}</td><td>${b.item||""}</td><td>${vendorCell}</td><td>${b.qty??1}</td><td>${fmtMoney(b.unit||0)}</td><td>${toNumber(b.tax||0).toFixed(2)}</td><td>${fmtMoney(forecast)}</td><td>${fmtMoney(actual)}</td><td>${fmtMoney(variance)}</td><td class="budget-confirmation ${confirmationClass}">${confirmationLabel}</td><td class="row no-print">${toggleBtn}<button class="ghost" title="Edit" onclick="editLine('${b.id}')"><svg class="icon"><use href="#ic-edit"></use></svg></button><button class="danger" title="Delete" onclick="delLine('${b.id}')"><svg class="icon"><use href="#ic-trash"></use></svg></button></td>`;
     frag.appendChild(tr);
   });
   tbody.appendChild(frag);
@@ -4118,10 +4346,12 @@ function renderBudget(){
   qs("#sumActual").textContent=fmtMoney(sumA);
   qs("#sumVariance").textContent=fmtMoney(sumA-sumF);
 }
-function resetLineForm(){ ["bId","bCat","bItem","bNotes"].forEach(id=>{const el=qs("#"+id); if(el) el.value=""}); ["bQty","bUnit","bTax","bForecast","bActual"].forEach(id=>{const el=qs("#"+id); if(el) el.value="0"}); fillEventSelectors() }
+function resetLineForm(){ ["bId","bCat","bItem","bNotes"].forEach(id=>{const el=qs("#"+id); if(el) el.value=""}); ["bQty","bUnit","bTax","bForecast","bActual"].forEach(id=>{const el=qs("#"+id); if(el) el.value="0"}); const bVendor=qs('#bVendor'); if(bVendor) bVendor.value=""; fillEventSelectors(); const bService=qs('#bService'); if(bService) bService.value=""; }
 function editLine(id){
   const b=store.data.budget.find(x=>x.id===id); if(!b) return;
   qs("#bId").value=b.id; qs("#bEvent").value=b.eventId||""; qs("#bCat").value=b.cat||""; qs("#bItem").value=b.item||"";
+  qs("#bVendor").value=b.vendorId||"";
+  fillBudgetServiceSelector(b.vendorId||"", b.vendorServiceId||"");
   qs("#bQty").value=b.qty??1; qs("#bUnit").value=b.unit??0; qs("#bTax").value=b.tax??0; qs("#bForecast").value=b.forecast??0; qs("#bActual").value=b.actual??0; qs("#bNotes").value=b.notes||"";
   navigate("#/budget");
 }
@@ -4166,7 +4396,7 @@ function toggleLineConfirmation(id){
 }
 qs("#btnAddLine")?.addEventListener("click",()=>{ resetLineForm(); navigate("#/budget"); qs("#bCat")?.focus() });
 qs("#btnSaveLine")?.addEventListener("click",()=>{
-  const b={ id:(qs("#bId")?.value||"").trim()||null, eventId:qs("#bEvent")?.value||"", cat:qs("#bCat")?.value.trim(), item:qs("#bItem")?.value.trim(), qty:toNumber(qs("#bQty")?.value), unit:toNumber(qs("#bUnit")?.value), tax:toNumber(qs("#bTax")?.value), forecast:toNumber(qs("#bForecast")?.value), actual:toNumber(qs("#bActual")?.value), notes:qs("#bNotes")?.value.trim() };
+  const b={ id:(qs("#bId")?.value||"").trim()||null, eventId:qs("#bEvent")?.value||"", cat:qs("#bCat")?.value.trim(), item:qs("#bItem")?.value.trim(), vendorId:qs("#bVendor")?.value||"", vendorServiceId:qs("#bService")?.value||"", qty:toNumber(qs("#bQty")?.value), unit:toNumber(qs("#bUnit")?.value), tax:toNumber(qs("#bTax")?.value), forecast:toNumber(qs("#bForecast")?.value), actual:toNumber(qs("#bActual")?.value), notes:qs("#bNotes")?.value.trim() };
   if(b.id){
     const existing=store.data.budget.find(x=>x.id===b.id);
     if(existing){
@@ -4180,15 +4410,23 @@ qs("#btnSaveLine")?.addEventListener("click",()=>{
 });
 qs("#btnResetLine")?.addEventListener("click", resetLineForm);
 qs("#btnExportCSV")?.addEventListener("click",()=>{
-  const headers=["Event","Category","Item","Qty","Unit","Tax%","Forecast","Actual","Variance","Confirmation","Notes"];
+  const headers=["Event","Category","Item","Vendor","Service","Qty","Unit","Tax%","Forecast","Actual","Variance","Confirmation","Notes"];
   let csv=headers.join(",")+"\n";
   const eventsById=state.graph?.eventsById || new Map();
+  const vendorsById=new Map(store.data.vendors.map(v=>[v.id,v]));
   store.data.budget.forEach(b=>{
     const ev=eventsById.get(b.eventId);
+    const vendor = vendorsById.get(b.vendorId);
+    const vendorName = vendor ? (vendor.name || vendor.company || vendor.id) : "";
+    const serviceEntry = vendor && Array.isArray(vendor.services)
+      ? vendor.services.find(s=>s.id===b.vendorServiceId)
+      : null;
+    const serviceName = serviceEntry ? (serviceEntry.name || lookupCatalogMatch(serviceEntry)?.name || "") : "";
+    const serviceRef = serviceEntry?.refId ? ` [${serviceEntry.refId}]` : "";
     const forecast=b.forecast || (toNumber(b.qty)*toNumber(b.unit)*(1+toNumber(b.tax)/100));
     const actual=toNumber(b.actual);
     const variance=actual-forecast;
-    const row=[(ev?ev.title:""), b.cat||"", b.item||"", b.qty??1, b.unit??0, b.tax??0, forecast, actual, variance, (b.confirmed?"Confirmed":"Pending"), (b.notes||"").replace(/,/g,";")];
+    const row=[(ev?ev.title:""), b.cat||"", b.item||"", vendorName, `${serviceName}${serviceRef}`, b.qty??1, b.unit??0, b.tax??0, forecast, actual, variance, (b.confirmed?"Confirmed":"Pending"), (b.notes||"").replace(/,/g,";")];
     csv+=row.join(",")+"\n";
   });
   const blob=new Blob([csv],{type:"text/csv"});
