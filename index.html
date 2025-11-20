@@ -1007,12 +1007,12 @@ Perf notes:
 <div style="grid-column:1 / -1;">
 <div class="small">Services &amp; quotes</div>
 <div class="grid grid-4 gap-tight">
-  <div><div class="small">Type</div><select id="vServiceType"><option value="package">Package</option><option value="addon">Add-on</option><option value="custom" selected="">Custom</option></select></div>
-  <div><div class="small">Database ID</div><select id="vServiceRef"><option value="">Select package/add-on</option></select></div>
+  <div><div class="small">Type</div><select id="vServiceType"><option value="package">Package</option><option value="addon">Add-on</option><option value="venue">Venue</option><option value="custom" selected="">Custom</option></select></div>
+  <div><div class="small">Database ID</div><select id="vServiceRef"><option value="">Select package/add-on/venue</option></select></div>
   <div><div class="small">Service name</div><input id="vServiceName" placeholder="e.g., Dinner package"/></div>
   <div><div class="small">Price</div><input id="vServicePrice" min="0" step="0.01" type="number"/></div>
 </div>
-<div class="small muted" id="vendorServiceHint">Package/Add-on options load from your database; name/price auto-fill when you pick an ID.</div>
+<div class="small muted" id="vendorServiceHint">Package/Add-on/Venue options load from your database; name/price auto-fill when you pick an ID.</div>
 <div class="row" style="margin-top:6px"><button class="ghost" id="btnAddVendorService" type="button"><svg class="icon"><use href="#ic-plus"></use></svg> Add service</button></div>
 <ul class="pill-list" id="vendorServicesList" style="margin-top:6px"></ul>
 </div>
@@ -4067,18 +4067,25 @@ const vendorCatalogDefaults={
     { id:"AD-LIVE-JAZZ", name:"Live Jazz Trio", price:1200 },
     { id:"AD-CUSTOM-LIGHTING", name:"Custom Lighting Design", price:950 },
     { id:"AD-PHOTO-BOOTH", name:"Photo Booth Experience", price:750 }
+  ],
+  venues:[
+    { id:"VE-AURORA", name:"Aurora Ballroom" },
+    { id:"VE-HARBOR", name:"Harborview Terrace" },
+    { id:"VE-GARDEN", name:"Garden Pavilion" },
+    { id:"VE-SKYLINE", name:"Skyline Loft" }
   ]
 };
 function getVendorCatalog(){
   const src=(typeof window!=="undefined" && window.vendorCatalog)?window.vendorCatalog:{};
   const packages=Array.isArray(src?.packages)?src.packages:vendorCatalogDefaults.packages;
   const addons=Array.isArray(src?.addons)?src.addons:vendorCatalogDefaults.addons;
-  return { packages, addons };
+  const venues=Array.isArray(src?.venues)?src.venues:vendorCatalogDefaults.venues;
+  return { packages, addons, venues };
 }
 function findCatalogItem(type,id){
   if(!id) return null;
-  const { packages, addons } = getVendorCatalog();
-  const list = type==="package"?packages:type==="addon"?addons:[];
+  const { packages, addons, venues } = getVendorCatalog();
+  const list = type==="package"?packages:type==="addon"?addons:type==="venue"?venues:[];
   return list.find(item=>item.id===id)||null;
 }
 function lookupCatalogMatch(service){
@@ -4094,8 +4101,15 @@ function resolveServicePrice(service){
 function renderVendorCatalogOptions(){
   const select=qs('#vServiceRef'); if(!select) return;
   const type=(qs('#vServiceType')?.value||'').toLowerCase();
-  select.innerHTML='<option value="">Select package/add-on</option>';
-  const items = type==='package' ? getVendorCatalog().packages : type==='addon' ? getVendorCatalog().addons : [];
+  select.innerHTML='<option value="">Select package/add-on/venue</option>';
+  const catalog=getVendorCatalog();
+  const items = type==='package'
+    ? catalog.packages
+    : type==='addon'
+      ? catalog.addons
+      : type==='venue'
+        ? catalog.venues
+        : [];
   items.forEach(item=>{
     const opt=document.createElement('option');
     opt.value=item.id;
@@ -4238,7 +4252,7 @@ function addVendorService(){
   if(!Number.isFinite(price) && catalogMatch) price = toNumber(catalogMatch.price);
   if(!name){ alert('Add a service name before saving.'); return; }
   if(!Number.isFinite(price)){
-    alert('Pricing comes from your database. Choose a package/add-on with a price or enter one.');
+    alert('Pricing comes from your database. Choose a package/add-on/venue with a price or enter one.');
     return;
   }
   const services=Array.isArray(state.vendorServicesDraft)?state.vendorServicesDraft:[];
