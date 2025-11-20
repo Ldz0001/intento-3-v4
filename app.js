@@ -2605,26 +2605,82 @@
       const totalValue = Number(entry.total);
       budgetLine.forecast = Number.isFinite(totalValue) ? totalValue : 0;
       const vendorLines = Array.isArray(budgetLine.vendors) ? [...budgetLine.vendors] : [];
-      const services = Array.isArray(entry.quoteLine?.services) ? entry.quoteLine.services : [];
-      services.forEach((service, index) => {
+      const fallbackServiceLabel = (() => {
+        const isVenueLine = /venue/i.test(entry.cat || '') || entry.type === 'venue';
+        if (isVenueLine) {
+          return venueName ? `Venue - ${venueName}` : 'Venue';
+        }
+        if (entry.item) {
+          return entry.item;
+        }
+        return 'Service';
+      })();
+
+      const normalizedServices = (() => {
+        const rawServices = Array.isArray(entry.quoteLine?.services)
+          ? entry.quoteLine.services.slice()
+          : [];
+        if (!rawServices.length) {
+          return [
+            {
+              name: fallbackServiceLabel,
+              quantity: entry.quantity,
+            },
+          ];
+        }
+        return rawServices.map((service, serviceIndex) => ({
+          name: service?.name || fallbackServiceLabel || `Service ${serviceIndex + 1}`,
+          quantity: Number.isFinite(Number(service?.quantity)) && Number(service.quantity) !== 0
+            ? Number(service.quantity)
+            : entry.quantity,
+        }));
+      })();
+
+      const vendorCount = Math.max(normalizedServices.length, vendorLines.length);
+      for (let index = 0; index < vendorCount; index += 1) {
+        const existingVendor = vendorLines[index] || {};
+        const serviceInfo = normalizedServices[index]
+          || normalizedServices[normalizedServices.length - 1]
+          || { name: fallbackServiceLabel, quantity: entry.quantity };
+        const fallbackQty = Number.isFinite(Number(serviceInfo.quantity)) && Number(serviceInfo.quantity) !== 0
+          ? Number(serviceInfo.quantity)
+          : Number(entry.quantity);
+        const preferredQty = Number.isFinite(Number(fallbackQty)) && Number(fallbackQty) !== 0
+          ? Number(fallbackQty)
+          : Number(budgetLine.qty);
+        const normalizedQty = Number.isFinite(Number(existingVendor.qty)) && Number(existingVendor.qty) !== 0
+          ? Number(existingVendor.qty)
+          : Number.isFinite(Number(preferredQty)) && Number(preferredQty) !== 0
+            ? Number(preferredQty)
+            : 1;
+
         if (!vendorLines[index]) {
           vendorLines[index] = {
-            service: service?.name || `Service ${index + 1}`,
+            service: serviceInfo.name || fallbackServiceLabel || `Service ${index + 1}`,
             vendor: '',
+            qty: normalizedQty,
             price: 0,
             total: 0,
           };
-        } else if (service?.name && !vendorLines[index].service) {
-          vendorLines[index] = { ...vendorLines[index], service: service.name };
+        } else {
+          vendorLines[index] = {
+            ...existingVendor,
+            service: existingVendor.service || serviceInfo.name || fallbackServiceLabel || `Service ${index + 1}`,
+            qty: normalizedQty,
+          };
         }
-      });
+      }
       budgetLine.vendors = vendorLines;
       const vendorActual = vendorLines.reduce(
         (sum, vendor) => sum + Number(vendor?.total ?? vendor?.price ?? 0),
         0
       );
+      const hasVendorTotals = vendorLines.some((vendor) => {
+        const amount = Number(vendor?.total ?? vendor?.price ?? 0);
+        return Number.isFinite(amount) && amount !== 0;
+      });
       const existingActual = Number(budgetLine.actual);
-      budgetLine.actual = vendorLines.length
+      budgetLine.actual = hasVendorTotals
         ? vendorActual
         : Number.isFinite(existingActual)
           ? existingActual
