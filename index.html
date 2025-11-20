@@ -1007,12 +1007,12 @@ Perf notes:
 <div style="grid-column:1 / -1;">
 <div class="small">Services &amp; quotes</div>
 <div class="grid grid-4 gap-tight">
-  <div><div class="small">Type</div><select id="vServiceType"><option value="package">Package</option><option value="addon">Add-on</option><option value="custom" selected="">Custom</option></select></div>
-  <div><div class="small">Database ID</div><select id="vServiceRef"><option value="">Select package/add-on</option></select></div>
+  <div><div class="small">Type</div><select id="vServiceType"><option value="package">Package</option><option value="addon">Add-on</option><option value="venue">Venue</option><option value="custom" selected="">Custom</option></select></div>
+  <div><div class="small">Database ID</div><select id="vServiceRef"><option value="">Select package/add-on/venue</option></select></div>
   <div><div class="small">Service name</div><input id="vServiceName" placeholder="e.g., Dinner package"/></div>
   <div><div class="small">Price</div><input id="vServicePrice" min="0" step="0.01" type="number"/></div>
 </div>
-<div class="small muted" id="vendorServiceHint">Package/Add-on options load from your database; name/price auto-fill when you pick an ID.</div>
+<div class="small muted" id="vendorServiceHint">Package/Add-on/Venue options load from your database; name/price auto-fill when you pick an ID.</div>
 <div class="row" style="margin-top:6px"><button class="ghost" id="btnAddVendorService" type="button"><svg class="icon"><use href="#ic-plus"></use></svg> Add service</button></div>
 <ul class="pill-list" id="vendorServicesList" style="margin-top:6px"></ul>
 </div>
@@ -4067,18 +4067,25 @@ const vendorCatalogDefaults={
     { id:"AD-LIVE-JAZZ", name:"Live Jazz Trio", price:1200 },
     { id:"AD-CUSTOM-LIGHTING", name:"Custom Lighting Design", price:950 },
     { id:"AD-PHOTO-BOOTH", name:"Photo Booth Experience", price:750 }
+  ],
+  venues:[
+    { id:"VE-AURORA", name:"Aurora Ballroom" },
+    { id:"VE-HARBOR", name:"Harborview Terrace" },
+    { id:"VE-GARDEN", name:"Garden Pavilion" },
+    { id:"VE-SKYLINE", name:"Skyline Loft" }
   ]
 };
 function getVendorCatalog(){
   const src=(typeof window!=="undefined" && window.vendorCatalog)?window.vendorCatalog:{};
   const packages=Array.isArray(src?.packages)?src.packages:vendorCatalogDefaults.packages;
   const addons=Array.isArray(src?.addons)?src.addons:vendorCatalogDefaults.addons;
-  return { packages, addons };
+  const venues=Array.isArray(src?.venues)?src.venues:vendorCatalogDefaults.venues;
+  return { packages, addons, venues };
 }
 function findCatalogItem(type,id){
   if(!id) return null;
-  const { packages, addons } = getVendorCatalog();
-  const list = type==="package"?packages:type==="addon"?addons:[];
+  const { packages, addons, venues } = getVendorCatalog();
+  const list = type==="package"?packages:type==="addon"?addons:type==="venue"?venues:[];
   return list.find(item=>item.id===id)||null;
 }
 function lookupCatalogMatch(service){
@@ -4094,8 +4101,15 @@ function resolveServicePrice(service){
 function renderVendorCatalogOptions(){
   const select=qs('#vServiceRef'); if(!select) return;
   const type=(qs('#vServiceType')?.value||'').toLowerCase();
-  select.innerHTML='<option value="">Select package/add-on</option>';
-  const items = type==='package' ? getVendorCatalog().packages : type==='addon' ? getVendorCatalog().addons : [];
+  select.innerHTML='<option value="">Select package/add-on/venue</option>';
+  const catalog=getVendorCatalog();
+  const items = type==='package'
+    ? catalog.packages
+    : type==='addon'
+      ? catalog.addons
+      : type==='venue'
+        ? catalog.venues
+        : [];
   items.forEach(item=>{
     const opt=document.createElement('option');
     opt.value=item.id;
@@ -4236,13 +4250,17 @@ function addVendorService(){
   let price=toNumber(qs('#vServicePrice')?.value);
   if(!name && catalogMatch) name = catalogMatch.name || '';
   if(!Number.isFinite(price) && catalogMatch) price = toNumber(catalogMatch.price);
-  if(!name){ alert('Add a service name before saving.'); return; }
-  if(!Number.isFinite(price)){
-    alert('Pricing comes from your database. Choose a package/add-on with a price or enter one.');
-    return;
+  if(!name){ alert('Add a service name before saving.'); return false; }
+  const priceIsRequired = type === 'package' || type === 'addon';
+  if(!Number.isFinite(price) && priceIsRequired){
+    alert('Pricing comes from your database. Choose a package/add-on/venue with a price or enter one.');
+    return false;
   }
   const services=Array.isArray(state.vendorServicesDraft)?state.vendorServicesDraft:[];
-  const entry={ id:uid('svc'), type, name, price };
+  const entry={ id:uid('svc'), type, name };
+  if(Number.isFinite(price)){
+    entry.price = price;
+  }
   if(refId) entry.refId = refId;
   services.push(entry);
   state.vendorServicesDraft=services;
@@ -4250,6 +4268,7 @@ function addVendorService(){
   const refSelect=qs('#vServiceRef'); if(refSelect) refSelect.value='';
   const priceInput=qs('#vServicePrice'); if(priceInput) priceInput.value='';
   renderVendorServiceList();
+  return true;
 }
 
 function removeVendorService(id){
@@ -4294,6 +4313,16 @@ function renderVendors(){
   renderVendorServiceList();
   renderVendorDocsList();
 }
+function commitPendingVendorService(){
+  const refId=(qs('#vServiceRef')?.value||'').trim();
+  const rawName=qs('#vServiceName')?.value||'';
+  const rawPrice=qs('#vServicePrice')?.value||'';
+  const hasInput=rawName.trim() || refId || rawPrice.trim();
+  if(!hasInput){
+    return true;
+  }
+  return addVendorService();
+}
   function editVendor(id){
     const v=store.data.vendors.find(x=>x.id===id); if(!v) return;
     qs("#vId").value=v.id; qs("#vName").value=v.name||""; qs("#vCompany").value=v.company||""; qs("#vRole").value=v.role||"";
@@ -4307,6 +4336,10 @@ function renderVendors(){
 function delVendor(id){ if(confirm("Delete this vendor?")){ store.remove("vendors",id); renderAll("vendors") } }
 qs("#btnAddVendor")?.addEventListener("click",()=>{ resetVendorForm(); navigate("#/vendors"); qs("#vName")?.focus() });
   qs("#btnSaveVendor")?.addEventListener("click",()=>{
+    const addedPending = commitPendingVendorService();
+    if(addedPending === false){
+      return;
+    }
     const v={ id:(qs("#vId")?.value||"").trim()||null, name:qs("#vName")?.value.trim(), company:qs("#vCompany")?.value.trim(), role:qs("#vRole")?.value.trim(), email:qs("#vEmail")?.value.trim(), phone:qs("#vPhone")?.value.trim(), contract:qs("#vContract")?.value, docs:qs("#vDocs")?.value.trim(), services:Array.isArray(state.vendorServicesDraft)?state.vendorServicesDraft:[], docFiles:Array.isArray(state.vendorDocsDraft)?state.vendorDocsDraft:[] };
     if(!v.name){ alert("Vendor name is required"); return }
     store.upsert("vendors",v); resetVendorForm(); renderAll("vendors");
@@ -4562,13 +4595,13 @@ function clearBudgetProofDraft(){
         state.budgetServiceDrafts = [];
       }
       while(state.budgetServiceDrafts.length < min){
-        state.budgetServiceDrafts.push({ vendorId:'', vendorServiceId:'', name:'' });
+        state.budgetServiceDrafts.push({ vendorId:'', vendorServiceId:'', name:'', qty:1 });
       }
     }
 
     function updateBudgetServiceDraft(index, updates){
       ensureBudgetServiceDrafts(1);
-      const base = state.budgetServiceDrafts[index] || { vendorId:'', vendorServiceId:'', name:'' };
+      const base = state.budgetServiceDrafts[index] || { vendorId:'', vendorServiceId:'', name:'', qty:1 };
       state.budgetServiceDrafts[index] = { ...base, ...updates };
     }
 
@@ -4593,6 +4626,12 @@ function clearBudgetProofDraft(){
       }
       updateBudgetServiceDraft(index, { vendorServiceId:serviceId, name });
       renderBudgetServiceRows();
+    }
+
+    function handleBudgetServiceQtyInput(event){
+      const index = Number(event.target?.dataset?.index ?? 0);
+      const qty = toNumber(event.target?.value);
+      updateBudgetServiceDraft(index, { qty: qty>0?qty:1 });
     }
 
     function handleBudgetServiceNameInput(event){
@@ -4631,6 +4670,15 @@ function clearBudgetProofDraft(){
         renderBudgetVendorOptions(entry.vendorId||'', vendorSelect, serviceSelect);
         fillBudgetServiceSelector(entry.vendorId||'', entry.vendorServiceId||'', serviceSelect);
 
+        const qtyInput=document.createElement('input');
+        qtyInput.type='number';
+        qtyInput.min='0';
+        qtyInput.step='1';
+        qtyInput.value=Number.isFinite(Number(entry.qty)) && Number(entry.qty)>0 ? Number(entry.qty) : 1;
+        qtyInput.dataset.index=String(index);
+        qtyInput.className='budget-service-qty';
+        qtyInput.style.width='84px';
+
         const nameInput=document.createElement('input');
         nameInput.type='text';
         nameInput.placeholder='Custom service name';
@@ -4648,11 +4696,13 @@ function clearBudgetProofDraft(){
 
         vendorSelect.addEventListener('change', handleBudgetVendorChange);
         serviceSelect.addEventListener('change', handleBudgetServiceChange);
+        qtyInput.addEventListener('input', handleBudgetServiceQtyInput);
         nameInput.addEventListener('input', handleBudgetServiceNameInput);
         removeBtn.addEventListener('click', handleRemoveBudgetService);
 
         row.appendChild(vendorSelect);
         row.appendChild(serviceSelect);
+        row.appendChild(qtyInput);
         row.appendChild(nameInput);
         row.appendChild(removeBtn);
         container.appendChild(row);
@@ -4664,7 +4714,9 @@ function clearBudgetProofDraft(){
     const firstEntry = Array.isArray(state.budgetServiceDrafts) ? state.budgetServiceDrafts[0] : null;
     const vendorId=firstEntry?.vendorId||'';
     const serviceId=firstEntry?.vendorServiceId||'';
-    const qty=toNumber(qs('#bQty')?.value)||1;
+    const qty=Number.isFinite(Number(firstEntry?.qty)) && Number(firstEntry.qty)>0
+      ? Number(firstEntry.qty)
+      : toNumber(qs('#bQty')?.value)||1;
     if(!vendorId || !serviceId) return;
     const vendor=store.data.vendors.find(v=>v.id===vendorId);
     const service=vendor && Array.isArray(vendor.services) ? vendor.services.find(s=>s.id===serviceId) : null;
@@ -4681,7 +4733,7 @@ function clearBudgetProofDraft(){
   qs('#bItem')?.addEventListener('change', applyCatalogContextFromItem);
   qs('#bAddService')?.addEventListener('click',()=>{
     ensureBudgetServiceDrafts(1);
-    state.budgetServiceDrafts.push({ vendorId:'', vendorServiceId:'', name:'' });
+    state.budgetServiceDrafts.push({ vendorId:'', vendorServiceId:'', name:'', qty:1 });
     renderBudgetServiceRows();
   });
 qs('#bProof')?.addEventListener('change', async (e)=>{
@@ -4755,15 +4807,15 @@ function renderBudget(){
   qs("#sumActual").textContent=fmtMoney(sumA);
   qs("#sumVariance").textContent=fmtMoney(sumA-sumF);
 }
-    function resetLineForm(){ ["bId","bCat","bItem","bNotes"].forEach(id=>{const el=qs("#"+id); if(el) el.value=""}); ["bQty","bUnit","bTax","bForecast","bActual"].forEach(id=>{const el=qs("#"+id); if(el) el.value="0"}); setBudgetCatalogContext('', ''); state.budgetServiceDrafts=[{ vendorId:'', vendorServiceId:'', name:'' }]; fillEventSelectors(); renderBudgetServiceRows(); const vendorConfirm=qs('#bVendorConfirmed'); if(vendorConfirm) vendorConfirm.checked=false; const paymentSel=qs('#bPaymentStatus'); if(paymentSel) paymentSel.value='unpaid'; clearBudgetProofDraft(); }
+    function resetLineForm(){ ["bId","bCat","bItem","bNotes"].forEach(id=>{const el=qs("#"+id); if(el) el.value=""}); ["bQty","bUnit","bTax","bForecast","bActual"].forEach(id=>{const el=qs("#"+id); if(el) el.value="0"}); setBudgetCatalogContext('', ''); state.budgetServiceDrafts=[{ vendorId:'', vendorServiceId:'', name:'', qty:1 }]; fillEventSelectors(); renderBudgetServiceRows(); const vendorConfirm=qs('#bVendorConfirmed'); if(vendorConfirm) vendorConfirm.checked=false; const paymentSel=qs('#bPaymentStatus'); if(paymentSel) paymentSel.value='unpaid'; clearBudgetProofDraft(); }
     function editLine(id){
       const b=store.data.budget.find(x=>x.id===id); if(!b) return;
       qs("#bId").value=b.id; qs("#bEvent").value=b.eventId||""; qs("#bCat").value=b.cat||""; qs("#bItem").value=b.item||"";
       setBudgetCatalogContext(b.catalogRefId||'', b.catalogType||'');
       const vendorServices = Array.isArray(b.vendorServices) && b.vendorServices.length
-        ? b.vendorServices.map(entry=>({ vendorId:entry.vendorId||'', vendorServiceId:entry.vendorServiceId||'', name:entry.name||'' }))
-        : [{ vendorId:b.vendorId||'', vendorServiceId:b.vendorServiceId||'', name:b.vendorServiceName||'' }];
-      state.budgetServiceDrafts = vendorServices.length ? vendorServices : [{ vendorId:'', vendorServiceId:'', name:'' }];
+        ? b.vendorServices.map(entry=>({ vendorId:entry.vendorId||'', vendorServiceId:entry.vendorServiceId||'', name:entry.name||'', qty:toNumber(entry.qty)||1 }))
+        : [{ vendorId:b.vendorId||'', vendorServiceId:b.vendorServiceId||'', name:b.vendorServiceName||'', qty:b.qty??1 }];
+      state.budgetServiceDrafts = vendorServices.length ? vendorServices : [{ vendorId:'', vendorServiceId:'', name:'', qty:1 }];
       renderBudgetServiceRows();
       qs("#bQty").value=b.qty??1; qs("#bUnit").value=b.unit??0; qs("#bTax").value=b.tax??0; qs("#bForecast").value=b.forecast??0; qs("#bActual").value=b.actual??0; qs("#bNotes").value=b.notes||"";
       const vendorConfirm=qs('#bVendorConfirmed'); if(vendorConfirm) vendorConfirm.checked = Boolean(b.vendorConfirmed);
@@ -4829,7 +4881,7 @@ function toggleLineConfirmation(id){
     qs("#btnSaveLine")?.addEventListener("click",()=>{
       const serviceDrafts = (Array.isArray(state.budgetServiceDrafts)?state.budgetServiceDrafts:[])
         .filter(entry=>entry && (entry.vendorId || entry.vendorServiceId || (entry.name && entry.name.trim())))
-        .map(entry=>({ vendorId:entry.vendorId||'', vendorServiceId:entry.vendorServiceId||'', name:(entry.name||'').trim() }));
+        .map(entry=>({ vendorId:entry.vendorId||'', vendorServiceId:entry.vendorServiceId||'', name:(entry.name||'').trim(), qty:toNumber(entry.qty)||1 }));
       const primaryService = serviceDrafts[0] || { vendorId:'', vendorServiceId:'', name:'' };
       const b={ id:(qs("#bId")?.value||"").trim()||null, eventId:qs("#bEvent")?.value||"", cat:qs("#bCat")?.value.trim(), item:qs("#bItem")?.value.trim(), vendorId:primaryService.vendorId||"", vendorServiceId:primaryService.vendorServiceId||"", vendorServices:serviceDrafts, qty:toNumber(qs("#bQty")?.value), unit:toNumber(qs("#bUnit")?.value), tax:toNumber(qs("#bTax")?.value), forecast:toNumber(qs("#bForecast")?.value), actual:toNumber(qs("#bActual")?.value), vendorConfirmed:Boolean(qs('#bVendorConfirmed')?.checked), paymentStatus:(qs('#bPaymentStatus')?.value||'unpaid'), paymentProofName:state.budgetProofDraft?.name||"", paymentProofData:state.budgetProofDraft?.data||"", catalogRefId:(qs('#bCatalogRef')?.value||'').trim(), catalogType:(qs('#bCatalogType')?.value||'').trim(), notes:qs("#bNotes")?.value.trim() };
   if(b.id){
